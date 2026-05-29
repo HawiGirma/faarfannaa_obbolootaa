@@ -1,120 +1,115 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 import '../core/constants/app_constants.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final SupabaseClient _client = Supabase.instance.client;
 
-  User? get currentUser => _auth.currentUser;
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  // ── Current session ───────────────────────────────────────────────────
 
-  // ── Raw Firebase Auth methods (no Firestore dependency) ──────────────
+  User? get currentUser => _client.auth.currentUser;
 
-  /// Sign in — returns the Firebase User only, no Firestore lookup.
-  /// Safe to call even when Firestore doesn't exist yet.
-  Future<User?> signInRaw(String email, String password) async {
-    final credential = await _auth.signInWithEmailAndPassword(
+  Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
+
+  bool get isSignedIn => currentUser != null;
+
+  // ── Sign in ───────────────────────────────────────────────────────────
+
+  Future<User?> signIn(String email, String password) async {
+    final response = await _client.auth.signInWithPassword(
       email: email.trim(),
       password: password,
     );
-    // Ensure the admin Firestore doc exists (needed for Storage rules)
-    if (credential.user != null &&
-        AppConstants.adminEmails.contains(email.trim().toLowerCase())) {
-      await _writeAdminDoc(credential.user!.uid, email.trim());
+    final user = response.user;
+    if (user != null) {
+      await _upsertUserDoc(user, isAdmin: _isAdminEmail(user.email));
     }
-    return credential.user;
+    return user;
   }
 
-  /// Create admin account — Firebase Auth only, no Firestore write.
-  /// Firestore write is attempted separately and silently ignored on failure.
-  Future<User?> registerAdminRaw(String email, String password) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
+  // ── Register (first-time admin setup) ────────────────────────────────
+
+  Future<User?> registerAdmin(String email, String password) async {
+    final response = await _client.auth.signUp(
       email: email.trim(),
       password: password,
     );
-    if (credential.user != null) {
-      await credential.user!.updateDisplayName('Admin');
-      // Write Firestore doc — retry once on failure so isAdmin flag is set
-      // for Storage rules that check Firestore.
-      await _writeAdminDoc(credential.user!.uid, email.trim());
-    }
-    return credential.user;
-  }
-
-  /// Writes (or overwrites) the admin user document in Firestore.
-  /// Called on first registration and on every sign-in to keep the doc fresh.
-  Future<void> _writeAdminDoc(String uid, String email) async {
-    final user = UserModel(
-      uid: uid,
-      email: email,
-      displayName: 'Admin',
-      isAdmin: true,
-      createdAt: DateTime.now(),
-    );
-    try {
-      await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(uid)
-          .set(user.toFirestore(), SetOptions(merge: true));
-    } catch (_) {
-      // Firestore not set up yet — Storage email-based rule still allows upload
-    }
-  }
-
-  // ── Legacy methods (kept for compatibility) ──────────────────────────
-
-  Future<UserModel?> signIn(String email, String password) async {
-    final user = await signInRaw(email, password);
+    final user = response.user;
     if (user != null) {
-      return await getUserModel(user.uid);
+      await _upsertUserDoc(user, isAdmin: true);
     }
-    return null;
+    return user;
   }
 
-  Future<UserModel?> registerAdmin(String email, String password) async {
-    final user = await registerAdminRaw(email, password);
-    if (user != null) {
-      return await getUserModel(user.uid);
-    }
-    return null;
-  }
-
-  // ── Firestore methods ────────────────────────────────────────────────
-
-  /// Get user model from Firestore. Returns null if doc missing or DB unavailable.
-  Future<UserModel?> getUserModel(String uid) async {
-    try {
-      final doc = await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(uid)
-          .get();
-      if (doc.exists) return UserModel.fromFirestore(doc);
-    } catch (_) {
-      // Firestore unavailable — caller handles null
-    }
-    return null;
-  }
+  // ── Sign out ──────────────────────────────────────────────────────────
 
   Future<void> signOut() async {
-    await _auth.signOut();
+    await _client.auth.signOut();
   }
+
+  // ── User profile ──────────────────────────────────────────────────────
+
+  Future<UserModel?> getUserModel(String uid) async {
+    try {
+      final row = await _client
+          .from(AppConstants.usersTable)
+          .select()
+          .eq('id', uid)
+          .maybeSingle();
+      if (row != null) return UserModel.fromMap(row);
+    } catch (e) {
+      debugPrint('AuthService.getUserModel: $e');
+    }
+    return null;
+  }
+
+  // ── Favorites ─────────────────────────────────────────────────────────
 
   Future<void> toggleFavorite(
     String uid,
     String songId,
     bool isFavorite,
   ) async {
-    final ref = _firestore.collection(AppConstants.usersCollection).doc(uid);
+    // Read current list, mutate, write back
+    final row = await _client
+        .from(AppConstants.usersTable)
+        .select('favorite_ids')
+        .eq('id', uid)
+        .maybeSingle();
+
+    final current = (row?['favorite_ids'] as List<dynamic>?)
+            ?.map((e) => e as String)
+            .toList() ??
+        [];
+
     if (isFavorite) {
-      await ref.update({
-        'favoriteIds': FieldValue.arrayUnion([songId]),
-      });
+      if (!current.contains(songId)) current.add(songId);
     } else {
-      await ref.update({
-        'favoriteIds': FieldValue.arrayRemove([songId]),
-      });
+      current.remove(songId);
+    }
+
+    await _client
+        .from(AppConstants.usersTable)
+        .update({'favorite_ids': current}).eq('id', uid);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+
+  bool _isAdminEmail(String? email) =>
+      AppConstants.adminEmails.contains(email?.toLowerCase());
+
+  Future<void> _upsertUserDoc(User user, {required bool isAdmin}) async {
+    try {
+      await _client.from(AppConstants.usersTable).upsert({
+        'id': user.id,
+        'email': user.email,
+        'display_name': user.userMetadata?['display_name'] ?? 'Admin',
+        'is_admin': isAdmin,
+        'favorite_ids': [],
+      }, onConflict: 'id');
+    } catch (e) {
+      debugPrint('AuthService._upsertUserDoc: $e');
     }
   }
 }

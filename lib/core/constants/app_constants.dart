@@ -2,23 +2,27 @@ class AppConstants {
   static const String appName = 'Faarfanna Obbolootaa';
   static const String appNameShort = 'FO';
 
-  // Firestore Collections
-  static const String songsCollection = 'songs';
-  static const String usersCollection = 'users';
-  static const String favoritesCollection = 'favorites';
-  static const String playlistsCollection = 'playlists';
+  // ── Supabase ──────────────────────────────────────────────────────────
+  static const String supabaseUrl = 'https://mwnrsfnnazyskpvylcfs.supabase.co';
+  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13bnJzZm5uYXp5c2twdnlsY2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNDU3NjksImV4cCI6MjA5NTYyMTc2OX0.GMquG6710zq5NKRyCtGurHR4bY6F3cJCFACOLEJikRk';
 
-  // Storage Paths
-  static const String audioStoragePath = 'songs/audio/';
-  static const String imageStoragePath = 'songs/images/';
+  // ── Supabase table names ──────────────────────────────────────────────
+  static const String songsTable = 'songs';
+  static const String usersTable = 'users';
+  static const String favoritesTable = 'favorites';
 
-  // SharedPreferences Keys
+  // ── Supabase Storage buckets ──────────────────────────────────────────
+  static const String songsBucket = 'songs';
+  static const String audioFolder = 'audio';
+  static const String imagesFolder = 'images';
+
+  // ── SharedPreferences Keys ────────────────────────────────────────────
   static const String themeKey = 'theme_mode';
   static const String languageKey = 'language_code';
   static const String onboardingKey = 'onboarding_done';
   static const String recentlyPlayedKey = 'recently_played';
 
-  // Languages
+  // ── Languages ─────────────────────────────────────────────────────────
   static const String langAfaanOromo = 'Afaan Oromo';
   static const String langEnglish = 'English';
   static const String langAmharic = 'Amharic';
@@ -29,19 +33,19 @@ class AppConstants {
     langAmharic,
   ];
 
-  // Admin credentials (display name → real Firebase email)
-  // The admin logs in with username "foAdmin" and password "admin@fo"
-  // Internally mapped to the Firebase account below
+  // ── Admin credentials ─────────────────────────────────────────────────
+  // The admin logs in with username "foAdmin" / password "admin@fo"
+  // Internally mapped to the Supabase Auth account below
   static const String adminUsername = 'foAdmin';
   static const String adminPassword = 'admin@fo';
-  static const String adminFirebaseEmail = 'admin@faarfanna.com';
+  static const String adminEmail = 'admin@faarfanna.com';
 
-  // Admin emails — any account with these emails gets isAdmin = true
+  // Any account whose email is in this list is treated as admin
   static const List<String> adminEmails = [
     'admin@faarfanna.com',
     'admin@fo.com',
   ];
 
-  // Pagination
+  // ── Pagination ────────────────────────────────────────────────────────
   static const int songsPerPage = 20;
 }

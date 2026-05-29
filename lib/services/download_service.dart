@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Manages local caching of audio files.
 ///
 /// Flow:
-///   1. First play  → stream from Firebase Storage URL (online)
+///   1. First play  → stream from Supabase Storage URL (online)
 ///   2. After first successful retrieval → download & save to local storage
 ///   3. Subsequent plays → serve from local file (offline-capable)
 class DownloadService extends ChangeNotifier {

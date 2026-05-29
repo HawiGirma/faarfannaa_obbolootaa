@@ -37,11 +37,15 @@ class SongProvider extends ChangeNotifier {
       _allSongs = songs;
       _applyLanguageFilter();
       notifyListeners();
+    }, onError: (e) {
+      debugPrint('SongProvider stream error: $e');
     });
 
     _songService.getFeaturedSongs().listen((songs) {
       _featuredSongs = songs;
       notifyListeners();
+    }, onError: (e) {
+      debugPrint('SongProvider featured stream error: $e');
     });
   }
 
@@ -53,6 +57,7 @@ class SongProvider extends ChangeNotifier {
       _trendingSongs = await _songService.getTrendingSongs();
     } catch (e) {
       _errorMessage = e.toString();
+      debugPrint('SongProvider._loadInitialData: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -91,6 +96,7 @@ class SongProvider extends ChangeNotifier {
       _searchResults = await _songService.searchSongs(query);
     } catch (e) {
       _searchResults = [];
+      debugPrint('SongProvider.search: $e');
     } finally {
       _isSearching = false;
       notifyListeners();
@@ -98,14 +104,15 @@ class SongProvider extends ChangeNotifier {
   }
 
   Future<List<SongModel>> getFavoriteSongs(List<String> ids) async {
-    return await _songService.getSongsByIds(ids);
+    return _songService.getSongsByIds(ids);
   }
 
   Future<void> incrementPlayCount(String id) async {
     await _songService.incrementPlayCount(id);
   }
 
-  // Admin operations — these rethrow on failure so the UI can show the error
+  // ── Admin operations — rethrow so the UI shows the real error ─────────
+
   Future<void> addSong(SongModel song) async {
     await _songService.addSong(song);
   }
@@ -118,7 +125,8 @@ class SongProvider extends ChangeNotifier {
     try {
       await _songService.deleteSong(id);
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('SongProvider.deleteSong: $e');
       return false;
     }
   }
@@ -127,7 +135,8 @@ class SongProvider extends ChangeNotifier {
     try {
       await _songService.toggleFeatured(id, featured);
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('SongProvider.toggleFeatured: $e');
       return false;
     }
   }

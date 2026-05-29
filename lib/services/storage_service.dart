@@ -1,50 +1,14 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/constants/app_constants.dart';
 
 class StorageService {
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  SupabaseClient get _client => Supabase.instance.client;
 
-  // ─── Cross-platform upload helpers ───────────────────────────────────
+  // ── Audio ─────────────────────────────────────────────────────────────
 
-  /// Uploads audio and returns the public download URL.
-  /// Pass [bytes] on web, [file] on mobile/desktop.
-  Future<String> uploadAudio(
-    String fileName, {
-    File? file,
-    Uint8List? bytes,
-  }) async {
-    final url = await _upload(
-      path: '${AppConstants.audioStoragePath}$fileName',
-      contentType: 'audio/mpeg',
-      file: file,
-      bytes: bytes,
-      onProgress: null,
-    );
-    return url;
-  }
-
-  /// Uploads an image and returns the public download URL.
-  /// Pass [bytes] on web, [file] on mobile/desktop.
-  Future<String> uploadImage(
-    String fileName, {
-    File? file,
-    Uint8List? bytes,
-  }) async {
-    final url = await _upload(
-      path: '${AppConstants.imageStoragePath}$fileName',
-      contentType: 'image/jpeg',
-      file: file,
-      bytes: bytes,
-      onProgress: null,
-    );
-    return url;
-  }
-
-  /// Uploads audio with a progress callback (0.0 → 1.0).
-  /// Pass [bytes] on web, [file] on mobile/desktop.
   Future<String> uploadAudioWithProgress(
     String fileName, {
     File? file,
@@ -52,16 +16,17 @@ class StorageService {
     required void Function(double) onProgress,
   }) {
     return _upload(
-      path: '${AppConstants.audioStoragePath}$fileName',
-      contentType: 'audio/mpeg',
+      folder: AppConstants.audioFolder,
+      fileName: fileName,
+      mimeType: 'audio/mpeg',
       file: file,
       bytes: bytes,
       onProgress: onProgress,
     );
   }
 
-  /// Uploads an image with a progress callback (0.0 → 1.0).
-  /// Pass [bytes] on web, [file] on mobile/desktop.
+  // ── Images ────────────────────────────────────────────────────────────
+
   Future<String> uploadImageWithProgress(
     String fileName, {
     File? file,
@@ -69,64 +34,91 @@ class StorageService {
     required void Function(double) onProgress,
   }) {
     return _upload(
-      path: '${AppConstants.imageStoragePath}$fileName',
-      contentType: 'image/jpeg',
+      folder: AppConstants.imagesFolder,
+      fileName: fileName,
+      mimeType: 'image/jpeg',
       file: file,
       bytes: bytes,
       onProgress: onProgress,
     );
   }
 
-  // ─── Core upload implementation ───────────────────────────────────────
+  // ── Delete ────────────────────────────────────────────────────────────
 
-  Future<String> _upload({
-    required String path,
-    required String contentType,
-    File? file,
-    Uint8List? bytes,
-    void Function(double)? onProgress,
-  }) async {
-    final ref = _storage.ref().child(path);
-    final meta = SettableMetadata(contentType: contentType);
-
-    // Choose the right upload method for the platform
-    final UploadTask task;
-    if (kIsWeb || bytes != null) {
-      assert(bytes != null, 'bytes must be provided on web');
-      task = ref.putData(bytes!, meta);
-    } else {
-      assert(file != null, 'file must be provided on non-web');
-      task = ref.putFile(file!, meta);
+  Future<void> deleteFile(String storagePath) async {
+    try {
+      await _client.storage
+          .from(AppConstants.songsBucket)
+          .remove([storagePath]);
+    } catch (e) {
+      debugPrint('StorageService.deleteFile: $e');
     }
-
-    // Listen to progress events
-    if (onProgress != null) {
-      task.snapshotEvents.listen((snapshot) {
-        if (snapshot.totalBytes > 0) {
-          onProgress(snapshot.bytesTransferred / snapshot.totalBytes);
-        }
-      });
-    }
-
-    // Wait for the task to complete by listening to state changes
-    await task.whenComplete(() {});
-
-    final snapshot = await task;
-    if (snapshot.state != TaskState.success) {
-      throw Exception('Upload failed with state: ${snapshot.state}');
-    }
-
-    return await snapshot.ref.getDownloadURL();
   }
-
-  // ─── Delete ───────────────────────────────────────────────────────────
 
   Future<void> deleteByUrl(String url) async {
     try {
-      final ref = _storage.refFromURL(url);
-      await ref.delete();
+      final uri = Uri.parse(url);
+      final segments = uri.pathSegments;
+      final bucketIndex = segments.indexOf(AppConstants.songsBucket);
+      if (bucketIndex == -1) return;
+      final storagePath = segments.sublist(bucketIndex + 1).join('/');
+      await deleteFile(storagePath);
     } catch (e) {
-      debugPrint('StorageService.deleteByUrl failed: $e');
+      debugPrint('StorageService.deleteByUrl: $e');
     }
+  }
+
+  // ── Core upload ───────────────────────────────────────────────────────
+
+  Future<String> _upload({
+    required String folder,
+    required String fileName,
+    required String mimeType,
+    File? file,
+    Uint8List? bytes,
+    required void Function(double) onProgress,
+  }) async {
+    final storagePath = '$folder/$fileName';
+    const String bucket = AppConstants.songsBucket;
+
+    // Resolve bytes
+    final Uint8List data;
+    if (kIsWeb || bytes != null) {
+      assert(bytes != null, 'bytes required on web');
+      data = bytes!;
+    } else {
+      assert(file != null, 'file required on non-web');
+      data = await file!.readAsBytes();
+    }
+
+    debugPrint('StorageService: uploading $storagePath '
+        '(${data.lengthInBytes} bytes, $mimeType) to bucket "$bucket"');
+    debugPrint('StorageService: user=${_client.auth.currentUser?.email}');
+
+    onProgress(0.1);
+
+    try {
+      await _client.storage.from(bucket).uploadBinary(
+            storagePath,
+            data,
+            fileOptions: FileOptions(
+              contentType: mimeType,
+              upsert: true,
+            ),
+          );
+    } on StorageException catch (e) {
+      debugPrint('StorageService UPLOAD FAILED:');
+      debugPrint('  message : ${e.message}');
+      debugPrint('  status  : ${e.statusCode}');
+      debugPrint('  error   : ${e.error}');
+      rethrow;
+    }
+
+    onProgress(1.0);
+
+    final publicUrl = _client.storage.from(bucket).getPublicUrl(storagePath);
+
+    debugPrint('StorageService: upload success → $publicUrl');
+    return publicUrl;
   }
 }

@@ -1,114 +1,118 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/song_model.dart';
 import '../core/constants/app_constants.dart';
 
 class SongService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final SupabaseClient _client = Supabase.instance.client;
 
-  CollectionReference get _songsRef =>
-      _firestore.collection(AppConstants.songsCollection);
+  // ── Streams (realtime) ────────────────────────────────────────────────
 
-  /// Get all songs stream
+  /// All songs ordered by newest first — live updates via Supabase Realtime
   Stream<List<SongModel>> getSongsStream() {
-    return _songsRef.orderBy('createdAt', descending: true).snapshots().map(
-          (snap) => snap.docs.map((d) => SongModel.fromFirestore(d)).toList(),
-        );
+    return _client
+        .from(AppConstants.songsTable)
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .map((rows) => rows.map(SongModel.fromMap).toList());
   }
 
-  /// Get featured songs
+  /// Featured songs — live updates
   Stream<List<SongModel>> getFeaturedSongs() {
-    return _songsRef
-        .where('featured', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
-        .limit(10)
-        .snapshots()
-        .map(
-          (snap) => snap.docs.map((d) => SongModel.fromFirestore(d)).toList(),
-        );
+    return _client
+        .from(AppConstants.songsTable)
+        .stream(primaryKey: ['id'])
+        .eq('featured', true)
+        .order('created_at', ascending: false)
+        .map((rows) => rows.take(10).map(SongModel.fromMap).toList());
   }
 
-  /// Get recently added songs
+  // ── One-shot queries ──────────────────────────────────────────────────
+
   Future<List<SongModel>> getRecentSongs({int limit = 10}) async {
-    final snap = await _songsRef
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .get();
-    return snap.docs.map((d) => SongModel.fromFirestore(d)).toList();
+    final rows = await _client
+        .from(AppConstants.songsTable)
+        .select()
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return rows.map(SongModel.fromMap).toList();
   }
 
-  /// Get songs by language
-  Stream<List<SongModel>> getSongsByLanguage(String language) {
-    return _songsRef
-        .where('language', isEqualTo: language)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map(
-          (snap) => snap.docs.map((d) => SongModel.fromFirestore(d)).toList(),
-        );
-  }
-
-  /// Get trending songs (by play count)
   Future<List<SongModel>> getTrendingSongs({int limit = 10}) async {
-    final snap = await _songsRef
-        .orderBy('playCount', descending: true)
-        .limit(limit)
-        .get();
-    return snap.docs.map((d) => SongModel.fromFirestore(d)).toList();
+    final rows = await _client
+        .from(AppConstants.songsTable)
+        .select()
+        .order('play_count', ascending: false)
+        .limit(limit);
+    return rows.map(SongModel.fromMap).toList();
   }
 
-  /// Search songs
+  Future<List<SongModel>> getSongsByLanguage(String language) async {
+    final rows = await _client
+        .from(AppConstants.songsTable)
+        .select()
+        .eq('language', language)
+        .order('created_at', ascending: false);
+    return rows.map(SongModel.fromMap).toList();
+  }
+
   Future<List<SongModel>> searchSongs(String query) async {
     if (query.isEmpty) return [];
-    final queryLower = query.toLowerCase();
-    final snap = await _songsRef.get();
-    return snap.docs
-        .map((d) => SongModel.fromFirestore(d))
-        .where(
-          (s) =>
-              s.title.toLowerCase().contains(queryLower) ||
-              s.artist.toLowerCase().contains(queryLower) ||
-              s.language.toLowerCase().contains(queryLower),
-        )
-        .toList();
+    // Supabase ilike for case-insensitive partial match
+    final rows = await _client
+        .from(AppConstants.songsTable)
+        .select()
+        .or('title.ilike.%$query%,artist.ilike.%$query%,language.ilike.%$query%')
+        .order('created_at', ascending: false);
+    return rows.map(SongModel.fromMap).toList();
   }
 
-  /// Get song by ID
   Future<SongModel?> getSongById(String id) async {
-    final doc = await _songsRef.doc(id).get();
-    if (doc.exists) return SongModel.fromFirestore(doc);
+    final row = await _client
+        .from(AppConstants.songsTable)
+        .select()
+        .eq('id', id)
+        .maybeSingle();
+    if (row != null) return SongModel.fromMap(row);
     return null;
   }
 
-  /// Get songs by IDs (for favorites)
   Future<List<SongModel>> getSongsByIds(List<String> ids) async {
     if (ids.isEmpty) return [];
-    final futures = ids.map((id) => getSongById(id));
-    final results = await Future.wait(futures);
-    return results.whereType<SongModel>().toList();
+    final rows = await _client
+        .from(AppConstants.songsTable)
+        .select()
+        .inFilter('id', ids);
+    return rows.map(SongModel.fromMap).toList();
   }
 
-  /// Add song (admin only) — uses the song's existing id as the document ID
+  // ── Admin writes ──────────────────────────────────────────────────────
+
   Future<void> addSong(SongModel song) async {
-    await _songsRef.doc(song.id).set(song.toFirestore());
+    await _client.from(AppConstants.songsTable).insert(song.toMap());
   }
 
-  /// Update song (admin only)
   Future<void> updateSong(SongModel song) async {
-    await _songsRef.doc(song.id).update(song.toFirestore());
+    final data = song.toMap()..remove('id'); // id is the PK, not updated
+    await _client.from(AppConstants.songsTable).update(data).eq('id', song.id);
   }
 
-  /// Delete song (admin only)
   Future<void> deleteSong(String id) async {
-    await _songsRef.doc(id).delete();
+    await _client.from(AppConstants.songsTable).delete().eq('id', id);
   }
 
-  /// Increment play count
   Future<void> incrementPlayCount(String id) async {
-    await _songsRef.doc(id).update({'playCount': FieldValue.increment(1)});
+    try {
+      // Use Supabase RPC for atomic increment
+      await _client.rpc('increment_play_count', params: {'song_id': id});
+    } catch (e) {
+      debugPrint('SongService.incrementPlayCount: $e');
+    }
   }
 
-  /// Toggle featured
   Future<void> toggleFeatured(String id, bool featured) async {
-    await _songsRef.doc(id).update({'featured': featured});
+    await _client
+        .from(AppConstants.songsTable)
+        .update({'featured': featured}).eq('id', id);
   }
 }

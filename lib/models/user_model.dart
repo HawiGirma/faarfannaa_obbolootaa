@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class UserModel {
   final String uid;
   final String email;
@@ -19,27 +17,32 @@ class UserModel {
     required this.createdAt,
   });
 
-  factory UserModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  /// Construct from a Supabase row
+  factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
-      uid: doc.id,
-      email: data['email'] ?? '',
-      displayName: data['displayName'] ?? '',
-      photoUrl: data['photoUrl'],
-      isAdmin: data['isAdmin'] ?? false,
-      favoriteIds: List<String>.from(data['favoriteIds'] ?? []),
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      uid: map['id'] as String? ?? map['uid'] as String? ?? '',
+      email: map['email'] as String? ?? '',
+      displayName: map['display_name'] as String? ?? '',
+      photoUrl: map['photo_url'] as String?,
+      isAdmin: map['is_admin'] as bool? ?? false,
+      favoriteIds: (map['favorite_ids'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'] as String)
+          : DateTime.now(),
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  Map<String, dynamic> toMap() {
     return {
+      'id': uid,
       'email': email,
-      'displayName': displayName,
-      'photoUrl': photoUrl,
-      'isAdmin': isAdmin,
-      'favoriteIds': favoriteIds,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'display_name': displayName,
+      'photo_url': photoUrl,
+      'is_admin': isAdmin,
+      'favorite_ids': favoriteIds,
     };
   }
 

@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../core/constants/app_constants.dart';
@@ -26,24 +26,28 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _init() {
-    _authService.authStateChanges.listen((User? firebaseUser) async {
-      if (firebaseUser != null) {
-        // Try Firestore — but never crash if it's unavailable
+    // Listen to Supabase auth state changes
+    _authService.authStateChanges.listen((authState) async {
+      final supaUser = authState.session?.user;
+
+      if (supaUser != null) {
+        // Try to load the full user profile from the users table
         try {
-          _user = await _authService.getUserModel(firebaseUser.uid);
+          _user = await _authService.getUserModel(supaUser.id);
         } catch (_) {
           _user = null;
         }
 
-        // Fall back to a local UserModel built from Firebase Auth data
+        // Fall back to a minimal UserModel from auth metadata
         _user ??= UserModel(
-          uid: firebaseUser.uid,
-          email: firebaseUser.email ?? '',
+          uid: supaUser.id,
+          email: supaUser.email ?? '',
           displayName: 'Admin',
-          isAdmin: AppConstants.adminEmails
-              .contains(firebaseUser.email?.toLowerCase()),
+          isAdmin:
+              AppConstants.adminEmails.contains(supaUser.email?.toLowerCase()),
           createdAt: DateTime.now(),
         );
+
         _status = AuthStatus.authenticated;
       } else {
         _user = null;
@@ -51,13 +55,19 @@ class AuthProvider extends ChangeNotifier {
       }
       notifyListeners();
     });
+
+    // Reflect current session on startup
+    final currentUser = _authService.currentUser;
+    if (currentUser != null) {
+      _status = AuthStatus.authenticated;
+    }
   }
 
-  /// Admin sign-in.
+  // ── Admin sign-in ─────────────────────────────────────────────────────
+
   /// UI sends username "foAdmin" + password "admin@fo".
-  /// We map those to the real Firebase email and sign in.
+  /// We map those to the real Supabase email and sign in.
   Future<bool> adminSignIn(String username, String password) async {
-    // Step 1 — validate the simple display credentials
     if (username.trim() != AppConstants.adminUsername ||
         password != AppConstants.adminPassword) {
       _errorMessage = 'Invalid admin credentials.';
@@ -71,63 +81,78 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Step 2 — sign in with the real Firebase email
-      await _authService.signInRaw(
-        AppConstants.adminFirebaseEmail,
+      final user = await _authService.signIn(
+        AppConstants.adminEmail,
         AppConstants.adminPassword,
       );
-      // _init() listener will fire and set _user + _status automatically
-      return true;
-    } on FirebaseAuthException catch (e) {
-      // Step 3 — account doesn't exist yet → create it
-      if (e.code == 'user-not-found' ||
-          e.code == 'invalid-credential' ||
-          e.code == 'INVALID_LOGIN_CREDENTIALS') {
-        return await _createAndSignInAdmin();
-      }
-      _errorMessage = _getAuthError(e.code);
+      if (user != null) return true;
+
+      _errorMessage = 'Sign in failed.';
       _status = AuthStatus.error;
       notifyListeners();
       return false;
-    } on Exception catch (e) {
-      _errorMessage = 'Sign in failed: ${e.toString()}';
+    } on AuthException catch (e) {
+      // Account doesn't exist yet — create it on first run
+      final msg = e.message.toLowerCase();
+      if (msg.contains('invalid') ||
+          msg.contains('not found') ||
+          msg.contains('credentials') ||
+          msg.contains('email not confirmed') ||
+          e.statusCode == '400') {
+        return await _createAndSignInAdmin();
+      }
+      _errorMessage = _mapAuthError(e.message);
+      _status = AuthStatus.error;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _errorMessage = 'Sign in failed: $e';
       _status = AuthStatus.error;
       notifyListeners();
       return false;
     }
   }
 
-  /// Creates the admin Firebase Auth account on first use, then signs in.
   Future<bool> _createAndSignInAdmin() async {
     try {
-      await _authService.registerAdminRaw(
-        AppConstants.adminFirebaseEmail,
+      // Try to register first
+      await _authService.registerAdmin(
+        AppConstants.adminEmail,
         AppConstants.adminPassword,
       );
-      // _init() listener fires automatically after account creation
-      return true;
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'email-already-in-use') {
-        // Race condition — account exists, just sign in
-        try {
-          await _authService.signInRaw(
-            AppConstants.adminFirebaseEmail,
-            AppConstants.adminPassword,
-          );
-          return true;
-        } on Exception catch (inner) {
-          _errorMessage = 'Sign in failed: ${inner.toString()}';
-          _status = AuthStatus.error;
-          notifyListeners();
-          return false;
-        }
-      }
-      _errorMessage = _getAuthError(e.code);
+      // After signUp, immediately try signIn
+      // (works when email confirmation is disabled)
+      final user = await _authService.signIn(
+        AppConstants.adminEmail,
+        AppConstants.adminPassword,
+      );
+      if (user != null) return true;
+
+      _errorMessage =
+          'Account created. Please disable email confirmation in Supabase Dashboard → Authentication → Providers → Email → turn OFF "Confirm email", then try again.';
       _status = AuthStatus.error;
       notifyListeners();
       return false;
-    } on Exception catch (e) {
-      _errorMessage = 'Could not create admin account: ${e.toString()}';
+    } on AuthException catch (e) {
+      final msg = e.message.toLowerCase();
+      if (msg.contains('already registered') ||
+          msg.contains('already exists') ||
+          msg.contains('user already')) {
+        // Account exists but sign-in failed — likely email confirmation pending
+        _errorMessage =
+            'Account exists but email confirmation may be required. '
+            'Go to Supabase Dashboard → Authentication → Providers → Email → '
+            'turn OFF "Confirm email", then try again.';
+        _status = AuthStatus.error;
+        notifyListeners();
+        return false;
+      }
+      _errorMessage = _mapAuthError(e.message);
+      _status = AuthStatus.error;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _errorMessage = 'Could not create admin account: $e';
       _status = AuthStatus.error;
       notifyListeners();
       return false;
@@ -141,13 +166,15 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Favorites ─────────────────────────────────────────────────────────
+
   Future<void> toggleFavorite(String songId) async {
     if (_user == null) return;
     final isFav = _user!.favoriteIds.contains(songId);
     try {
       await _authService.toggleFavorite(_user!.uid, songId, !isFav);
-    } catch (_) {
-      // Firestore may not be set up yet — update local state only
+    } catch (e) {
+      debugPrint('AuthProvider.toggleFavorite: $e');
     }
     final updatedFavs = List<String>.from(_user!.favoriteIds);
     if (isFav) {
@@ -159,26 +186,18 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool isFavorite(String songId) {
-    return _user?.favoriteIds.contains(songId) ?? false;
-  }
+  bool isFavorite(String songId) =>
+      _user?.favoriteIds.contains(songId) ?? false;
 
-  String _getAuthError(String code) {
-    switch (code) {
-      case 'user-not-found':
-        return 'Admin account not found.';
-      case 'wrong-password':
-      case 'invalid-credential':
-      case 'INVALID_LOGIN_CREDENTIALS':
-        return 'Invalid admin credentials.';
-      case 'too-many-requests':
-        return 'Too many attempts. Please try again later.';
-      case 'network-request-failed':
-        return 'Network error. Check your connection.';
-      case 'operation-not-allowed':
-        return 'Email/password sign-in is not enabled in Firebase Console.';
-      default:
-        return 'Sign in failed ($code).';
+  // ── Error mapping ─────────────────────────────────────────────────────
+
+  String _mapAuthError(String message) {
+    final m = message.toLowerCase();
+    if (m.contains('invalid') || m.contains('credentials')) {
+      return 'Invalid admin credentials.';
     }
+    if (m.contains('too many')) return 'Too many attempts. Try again later.';
+    if (m.contains('network')) return 'Network error. Check your connection.';
+    return 'Sign in failed: $message';
   }
 }

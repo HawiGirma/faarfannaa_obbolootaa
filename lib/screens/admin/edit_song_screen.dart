@@ -59,11 +59,10 @@ class _EditSongScreenState extends State<EditSongScreen> {
       featured: _isFeatured,
     );
 
-    final success = await context.read<SongProvider>().updateSong(updated);
-    setState(() => _isSaving = false);
-
-    if (mounted) {
-      if (success) {
+    try {
+      await context.read<SongProvider>().updateSong(updated);
+      setState(() => _isSaving = false);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Song updated successfully!'),
@@ -76,10 +75,13 @@ class _EditSongScreenState extends State<EditSongScreen> {
           ),
         );
         Navigator.pop(context);
-      } else {
+      }
+    } catch (e) {
+      setState(() => _isSaving = false);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Failed to update song'),
+            content: Text('Failed to update song: $e'),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -97,14 +99,12 @@ class _EditSongScreenState extends State<EditSongScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? AppColors.darkBackground
-          : AppColors.lightBackground,
+      backgroundColor:
+          isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
         title: const Text('Edit Song'),
-        backgroundColor: isDark
-            ? AppColors.darkBackground
-            : AppColors.lightBackground,
+        backgroundColor:
+            isDark ? AppColors.darkBackground : AppColors.lightBackground,
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
           icon: Icon(
@@ -164,22 +164,19 @@ class _EditSongScreenState extends State<EditSongScreen> {
                   color: isDark ? AppColors.darkCard : AppColors.lightCard,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isDark
-                        ? AppColors.darkDivider
-                        : AppColors.lightDivider,
+                    color:
+                        isDark ? AppColors.darkDivider : AppColors.lightDivider,
                   ),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _selectedLanguage,
                     isExpanded: true,
-                    dropdownColor: isDark
-                        ? AppColors.darkCard
-                        : AppColors.lightCard,
+                    dropdownColor:
+                        isDark ? AppColors.darkCard : AppColors.lightCard,
                     style: TextStyle(
-                      color: isDark
-                          ? AppColors.textPrimary
-                          : AppColors.textDark,
+                      color:
+                          isDark ? AppColors.textPrimary : AppColors.textDark,
                       fontFamily: 'Poppins',
                       fontSize: 15,
                     ),
@@ -315,9 +312,8 @@ class _EditSongScreenState extends State<EditSongScreen> {
         Text(
           label,
           style: TextStyle(
-            color: isDark
-                ? AppColors.textSecondary
-                : AppColors.textDarkSecondary,
+            color:
+                isDark ? AppColors.textSecondary : AppColors.textDarkSecondary,
             fontSize: 13,
             fontWeight: FontWeight.w500,
             fontFamily: 'Poppins',

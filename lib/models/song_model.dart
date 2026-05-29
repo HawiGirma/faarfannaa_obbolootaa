@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class SongModel {
   final String id;
   final String title;
@@ -31,41 +29,45 @@ class SongModel {
     this.uploadedBy,
   });
 
-  factory SongModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  /// Construct from a Supabase row (Map<String, dynamic>)
+  factory SongModel.fromMap(Map<String, dynamic> map) {
     return SongModel(
-      id: doc.id,
-      title: data['title'] ?? '',
-      artist: data['artist'] ?? '',
-      language: data['language'] ?? '',
-      lyrics: data['lyrics'] ?? '',
-      audioUrl: data['audioUrl'] ?? '',
-      imageUrl: data['imageUrl'] ?? '',
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      featured: data['featured'] ?? false,
-      playCount: data['playCount'] ?? 0,
-      albumName: data['albumName'],
-      duration: data['durationSeconds'] != null
-          ? Duration(seconds: data['durationSeconds'])
+      id: map['id'] as String,
+      title: map['title'] as String? ?? '',
+      artist: map['artist'] as String? ?? '',
+      language: map['language'] as String? ?? '',
+      lyrics: map['lyrics'] as String? ?? '',
+      audioUrl: map['audio_url'] as String? ?? '',
+      imageUrl: map['cover_url'] as String? ?? '',
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'] as String)
+          : DateTime.now(),
+      featured: map['featured'] as bool? ?? false,
+      playCount: map['play_count'] as int? ?? 0,
+      albumName: map['album_name'] as String?,
+      duration: map['duration_seconds'] != null
+          ? Duration(seconds: map['duration_seconds'] as int)
           : null,
-      uploadedBy: data['uploadedBy'],
+      uploadedBy: map['uploaded_by'] as String?,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  /// Convert to a map for Supabase insert / update
+  Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'title': title,
       'artist': artist,
       'language': language,
       'lyrics': lyrics,
-      'audioUrl': audioUrl,
-      'imageUrl': imageUrl,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'audio_url': audioUrl,
+      'cover_url': imageUrl,
       'featured': featured,
-      'playCount': playCount,
-      'albumName': albumName,
-      'durationSeconds': duration?.inSeconds,
-      'uploadedBy': uploadedBy,
+      'play_count': playCount,
+      'album_name': albumName,
+      'duration_seconds': duration?.inSeconds,
+      'uploaded_by': uploadedBy,
+      // created_at is set by Supabase default (now())
     };
   }
 

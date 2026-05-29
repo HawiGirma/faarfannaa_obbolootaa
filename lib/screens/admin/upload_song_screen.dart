@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
@@ -53,10 +53,10 @@ class _UploadSongScreenState extends State<UploadSongScreen> {
   }
 
   Future<void> _pickAudio() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.audio,
       allowMultiple: false,
-      withData: kIsWeb, // on web we need bytes; on mobile path is enough
+      withData: kIsWeb,
     );
     if (result != null && result.files.isNotEmpty) {
       final picked = result.files.single;
@@ -75,8 +75,7 @@ class _UploadSongScreenState extends State<UploadSongScreen> {
 
   Future<void> _pickImage() async {
     if (kIsWeb) {
-      // image_picker web support is limited; use file_picker for consistency
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.image,
         allowMultiple: false,
         withData: true,
@@ -129,6 +128,10 @@ class _UploadSongScreenState extends State<UploadSongScreen> {
       final uploadedBy = auth.user?.uid;
       final songId = _uuid.v4();
 
+      debugPrint('Upload: starting audio upload, songId=$songId');
+      debugPrint(
+          'Upload: kIsWeb=$kIsWeb, hasBytes=${_audioBytes != null}, hasFile=${_audioFile != null}');
+
       // ── Upload audio ──────────────────────────────────────────────────
       final audioUrl = await _storageService.uploadAudioWithProgress(
         '$songId.mp3',
@@ -139,6 +142,8 @@ class _UploadSongScreenState extends State<UploadSongScreen> {
           setState(() => _uploadProgress = p * 0.5);
         },
       );
+
+      debugPrint('Upload: audio done, url=$audioUrl');
 
       // ── Upload image (optional) ───────────────────────────────────────
       String imageUrl = '';
@@ -159,11 +164,12 @@ class _UploadSongScreenState extends State<UploadSongScreen> {
             setState(() => _uploadProgress = 0.5 + p * 0.4);
           },
         );
+        debugPrint('Upload: image done, url=$imageUrl');
       }
 
       if (!mounted) return;
       setState(() {
-        _uploadStatus = 'Saving song data...';
+        _uploadStatus = 'Saving to Firestore...';
         _uploadProgress = 0.9;
       });
 
@@ -184,7 +190,9 @@ class _UploadSongScreenState extends State<UploadSongScreen> {
         uploadedBy: uploadedBy,
       );
 
+      debugPrint('Upload: saving song to Firestore...');
       await songProvider.addSong(song);
+      debugPrint('Upload: Firestore save done');
 
       if (!mounted) return;
       setState(() {
@@ -208,9 +216,13 @@ class _UploadSongScreenState extends State<UploadSongScreen> {
         );
         Navigator.pop(context);
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('Upload FAILED: $e');
+      debugPrint('Stack: $stack');
       if (!mounted) return;
-      setState(() => _isUploading = false);
+      setState(() {
+        _isUploading = false;
+      });
       _showError('Upload failed: $e');
     }
   }
@@ -251,6 +263,7 @@ class _UploadSongScreenState extends State<UploadSongScreen> {
               progress: _uploadProgress,
               status: _uploadStatus,
               isDark: isDark,
+              onCancel: () => setState(() => _isUploading = false),
             )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -667,11 +680,13 @@ class _UploadingView extends StatelessWidget {
   final double progress;
   final String status;
   final bool isDark;
+  final VoidCallback onCancel;
 
   const _UploadingView({
     required this.progress,
     required this.status,
     required this.isDark,
+    required this.onCancel,
   });
 
   @override
@@ -709,7 +724,7 @@ class _UploadingView extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: LinearProgressIndicator(
-                value: progress,
+                value: progress > 0 ? progress : null, // null = indeterminate
                 backgroundColor:
                     isDark ? AppColors.darkCard : AppColors.lightCard,
                 valueColor: const AlwaysStoppedAnimation<Color>(
@@ -720,12 +735,23 @@ class _UploadingView extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              '${(progress * 100).toInt()}%',
+              progress > 0 ? '${(progress * 100).toInt()}%' : 'Starting...',
               style: const TextStyle(
                 color: AppColors.primary,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 fontFamily: 'Poppins',
+              ),
+            ),
+            const SizedBox(height: 32),
+            TextButton(
+              onPressed: onCancel,
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  color: AppColors.error,
+                  fontFamily: 'Poppins',
+                ),
               ),
             ),
           ],
