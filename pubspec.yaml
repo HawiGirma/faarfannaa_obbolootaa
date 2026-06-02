@@ -12,7 +12,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # Supabase
+  # Supabase (auth + database + storage)
   supabase_flutter: ^2.12.4
 
   # Audio

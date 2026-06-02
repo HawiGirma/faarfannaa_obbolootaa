@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
+import '../../models/song_model.dart';
 import '../../providers/song_provider.dart';
 import '../../services/audio_player_service.dart';
 import '../../widgets/featured_card.dart';
@@ -21,7 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<String> _filters = ['All', ...AppConstants.languages];
 
-  void _playSong(context, song, List songs) {
+  void _playSong(BuildContext context, SongModel song, List<SongModel> songs) {
     final player = context.read<AudioPlayerService>();
     player.playSong(song, queue: songs);
     context.read<SongProvider>().incrementPlayCount(song.id);

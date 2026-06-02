@@ -1,5 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/song_model.dart';
 import 'download_service.dart';
 
@@ -72,18 +75,68 @@ class AudioPlayerService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Use local cached file if available, otherwise stream from remote
-      final url = _downloadService.resolveUrl(song.id, song.audioUrl);
-      await _player.setUrl(url);
+      // Check if this is a database storage URL
+      if (_isDatabaseStorageUrl(song.audioUrl)) {
+        debugPrint('AudioPlayer: Loading from database storage');
+        await _playFromDatabase(song.audioUrl);
+      } else {
+        debugPrint('AudioPlayer: Loading from URL: ${song.audioUrl}');
+        // Use local cached file if available, otherwise stream from remote
+        final url = _downloadService.resolveUrl(song.id, song.audioUrl);
+        await _player.setUrl(url);
+      }
+
       await _player.play();
 
       // After playback starts successfully, cache in background for next time
-      if (!_downloadService.isDownloaded(song.id) && song.audioUrl.isNotEmpty) {
+      if (!_downloadService.isDownloaded(song.id) &&
+          song.audioUrl.isNotEmpty &&
+          !_isDatabaseStorageUrl(song.audioUrl)) {
         _downloadService.downloadSong(song.id, song.audioUrl);
       }
     } catch (e) {
+      debugPrint('AudioPlayer ERROR: $e');
       _isLoading = false;
       notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Check if URL is a database storage URL (format: https://.../storage/{fileId})
+  bool _isDatabaseStorageUrl(String url) {
+    return url.contains('/storage/') && url.split('/storage/').length > 1;
+  }
+
+  /// Fetch audio file from database and play from bytes
+  Future<void> _playFromDatabase(String url) async {
+    try {
+      // Extract file ID from URL: https://xyz.supabase.co/storage/{fileId}
+      final fileId = url.split('/storage/').last;
+      debugPrint('AudioPlayer: Fetching file ID: $fileId from database');
+
+      // Fetch base64 data from database
+      final client = Supabase.instance.client;
+      final response = await client
+          .from('file_storage')
+          .select('data, mime_type')
+          .eq('id', fileId)
+          .single();
+
+      final base64Data = response['data'] as String;
+      debugPrint(
+          'AudioPlayer: Received base64 data, length=${base64Data.length}');
+
+      // Decode base64 to bytes
+      final bytes = base64Decode(base64Data);
+      debugPrint('AudioPlayer: Decoded to ${bytes.length} bytes');
+
+      // Play from bytes
+      await _player.setAudioSource(
+        _BytesAudioSource(bytes, mimeType: response['mime_type'] as String?),
+      );
+      debugPrint('AudioPlayer: Audio source set successfully');
+    } catch (e) {
+      debugPrint('AudioPlayer: Database fetch failed: $e');
       rethrow;
     }
   }
@@ -140,5 +193,27 @@ class AudioPlayerService extends ChangeNotifier {
   void dispose() {
     _player.dispose();
     super.dispose();
+  }
+}
+
+/// Custom audio source for playing from bytes (database storage)
+class _BytesAudioSource extends StreamAudioSource {
+  final Uint8List _bytes;
+  final String? mimeType;
+
+  _BytesAudioSource(this._bytes, {this.mimeType});
+
+  @override
+  Future<StreamAudioResponse> request([int? start, int? end]) async {
+    start ??= 0;
+    end ??= _bytes.length;
+
+    return StreamAudioResponse(
+      sourceLength: _bytes.length,
+      contentLength: end - start,
+      offset: start,
+      contentType: mimeType ?? 'audio/mpeg',
+      stream: Stream.value(_bytes.sublist(start, end)),
+    );
   }
 }
