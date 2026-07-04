@@ -18,10 +18,24 @@ class StorageService {
     Uint8List? bytes,
     required void Function(double) onProgress,
   }) {
+    // Determine MIME type from file extension
+    String mimeType = 'audio/mpeg'; // default
+    if (fileName.toLowerCase().endsWith('.mp3')) {
+      mimeType = 'audio/mpeg';
+    } else if (fileName.toLowerCase().endsWith('.m4a')) {
+      mimeType = 'audio/mp4';
+    } else if (fileName.toLowerCase().endsWith('.aac')) {
+      mimeType = 'audio/aac';
+    } else if (fileName.toLowerCase().endsWith('.wav')) {
+      mimeType = 'audio/wav';
+    } else if (fileName.toLowerCase().endsWith('.ogg')) {
+      mimeType = 'audio/ogg';
+    }
+
     return _upload(
       folder: AppConstants.audioFolder,
       fileName: fileName,
-      mimeType: 'audio/mpeg',
+      mimeType: mimeType,
       file: file,
       bytes: bytes,
       onProgress: onProgress,

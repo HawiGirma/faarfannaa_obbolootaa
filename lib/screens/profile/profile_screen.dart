@@ -246,150 +246,153 @@ class ProfileScreen extends StatelessWidget {
                   isDark ? AppColors.darkCard : AppColors.lightCard,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24)),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Icon
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: const BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.admin_panel_settings_rounded,
-                        color: Colors.white,
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Admin Login',
-                      style: TextStyle(
-                        color:
-                            isDark ? AppColors.textPrimary : AppColors.textDark,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Enter admin credentials to continue',
-                      style: TextStyle(
-                        color: isDark
-                            ? AppColors.textSecondary
-                            : AppColors.textDarkSecondary,
-                        fontSize: 12,
-                        fontFamily: 'Poppins',
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Username field
-                    _DialogField(
-                      controller: usernameCtrl,
-                      hint: 'Username',
-                      icon: Icons.person_outline_rounded,
-                      isDark: isDark,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Password field
-                    _DialogField(
-                      controller: passwordCtrl,
-                      hint: 'Password',
-                      icon: Icons.lock_outline_rounded,
-                      isDark: isDark,
-                      obscure: obscure,
-                      onToggleObscure: () =>
-                          setDialogState(() => obscure = !obscure),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Error message
-                    Consumer<AuthProvider>(
-                      builder: (_, a, __) => a.errorMessage != null
-                          ? Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Text(
-                                a.errorMessage!,
-                                style: const TextStyle(
-                                  color: AppColors.error,
-                                  fontSize: 12,
-                                  fontFamily: 'Poppins',
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Sign in button
-                    Consumer<AuthProvider>(
-                      builder: (_, a, __) => SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: AppColors.primaryGradient,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: TextButton(
-                            onPressed: a.isLoading
-                                ? null
-                                : () async {
-                                    final success = await a.adminSignIn(
-                                      usernameCtrl.text,
-                                      passwordCtrl.text,
-                                    );
-                                    if (success && ctx.mounted) {
-                                      Navigator.pop(ctx);
-                                    }
-                                  },
-                            child: a.isLoading
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2.5,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Sign In',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                      fontFamily: 'Poppins',
-                                    ),
-                                  ),
-                          ),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Icon
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: const BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.admin_panel_settings_rounded,
+                          color: Colors.white,
+                          size: 32,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: Text(
-                        'Cancel',
+                      const SizedBox(height: 16),
+                      Text(
+                        'Admin Login',
+                        style: TextStyle(
+                          color: isDark
+                              ? AppColors.textPrimary
+                              : AppColors.textDark,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Enter admin credentials to continue',
                         style: TextStyle(
                           color: isDark
                               ? AppColors.textSecondary
                               : AppColors.textDarkSecondary,
+                          fontSize: 12,
                           fontFamily: 'Poppins',
-                          fontSize: 13,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Username field
+                      _DialogField(
+                        controller: usernameCtrl,
+                        hint: 'Username',
+                        icon: Icons.person_outline_rounded,
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Password field
+                      _DialogField(
+                        controller: passwordCtrl,
+                        hint: 'Password',
+                        icon: Icons.lock_outline_rounded,
+                        isDark: isDark,
+                        obscure: obscure,
+                        onToggleObscure: () =>
+                            setDialogState(() => obscure = !obscure),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Error message
+                      Consumer<AuthProvider>(
+                        builder: (_, a, __) => a.errorMessage != null
+                            ? Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(
+                                  a.errorMessage!,
+                                  style: const TextStyle(
+                                    color: AppColors.error,
+                                    fontSize: 12,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      // Sign in button
+                      Consumer<AuthProvider>(
+                        builder: (_, a, __) => SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: AppColors.primaryGradient,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: TextButton(
+                              onPressed: a.isLoading
+                                  ? null
+                                  : () async {
+                                      final success = await a.adminSignIn(
+                                        usernameCtrl.text,
+                                        passwordCtrl.text,
+                                      );
+                                      if (success && ctx.mounted) {
+                                        Navigator.pop(ctx);
+                                      }
+                                    },
+                              child: a.isLoading
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2.5,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Sign In',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            color: isDark
+                                ? AppColors.textSecondary
+                                : AppColors.textDarkSecondary,
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );

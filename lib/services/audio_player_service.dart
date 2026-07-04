@@ -5,10 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/song_model.dart';
 import 'download_service.dart';
+import 'background_audio_service.dart';
 
 class AudioPlayerService extends ChangeNotifier {
   final AudioPlayer _player = AudioPlayer();
   final DownloadService _downloadService;
+  BackgroundAudioHandler? _audioHandler;
 
   SongModel? _currentSong;
   bool _isPlaying = false;
@@ -34,6 +36,11 @@ class AudioPlayerService extends ChangeNotifier {
 
   AudioPlayerService(this._downloadService) {
     _initListeners();
+  }
+
+  /// Set the background audio handler for notifications
+  void setAudioHandler(BackgroundAudioHandler handler) {
+    _audioHandler = handler;
   }
 
   void _initListeners() {
@@ -75,6 +82,14 @@ class AudioPlayerService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      debugPrint('AudioPlayer: Attempting to play song: ${song.title}');
+      debugPrint('AudioPlayer: Audio URL: ${song.audioUrl}');
+
+      // Check if audio URL is empty
+      if (song.audioUrl.isEmpty) {
+        throw Exception('Audio URL is empty for song: ${song.title}');
+      }
+
       // Check if this is a database storage URL
       if (_isDatabaseStorageUrl(song.audioUrl)) {
         debugPrint('AudioPlayer: Loading from database storage');
@@ -94,8 +109,9 @@ class AudioPlayerService extends ChangeNotifier {
           !_isDatabaseStorageUrl(song.audioUrl)) {
         _downloadService.downloadSong(song.id, song.audioUrl);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('AudioPlayer ERROR: $e');
+      debugPrint('AudioPlayer STACK TRACE: $stackTrace');
       _isLoading = false;
       notifyListeners();
       rethrow;
@@ -122,7 +138,11 @@ class AudioPlayerService extends ChangeNotifier {
           .eq('id', fileId)
           .single();
 
-      final base64Data = response['data'] as String;
+      final base64Data = response['data'] as String?;
+      if (base64Data == null || base64Data.isEmpty) {
+        throw Exception('No audio data found in database for file ID: $fileId');
+      }
+
       debugPrint(
           'AudioPlayer: Received base64 data, length=${base64Data.length}');
 
@@ -130,13 +150,21 @@ class AudioPlayerService extends ChangeNotifier {
       final bytes = base64Decode(base64Data);
       debugPrint('AudioPlayer: Decoded to ${bytes.length} bytes');
 
+      if (bytes.isEmpty) {
+        throw Exception('Decoded audio bytes are empty');
+      }
+
+      final mimeType = response['mime_type'] as String? ?? 'audio/mpeg';
+      debugPrint('AudioPlayer: Using MIME type: $mimeType');
+
       // Play from bytes
       await _player.setAudioSource(
-        _BytesAudioSource(bytes, mimeType: response['mime_type'] as String?),
+        _BytesAudioSource(bytes, mimeType: mimeType),
       );
       debugPrint('AudioPlayer: Audio source set successfully');
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('AudioPlayer: Database fetch failed: $e');
+      debugPrint('Stack trace: $stackTrace');
       rethrow;
     }
   }
