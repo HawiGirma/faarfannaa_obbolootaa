@@ -7,7 +7,6 @@ import '../../providers/song_provider.dart';
 import '../../services/audio_player_service.dart';
 import '../../widgets/song_card.dart';
 import '../../widgets/shimmer_loading.dart';
-import '../song_detail/song_detail_screen.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -43,20 +42,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final player = context.read<AudioPlayerService>();
     player.playSong(song, queue: _favSongs);
     context.read<SongProvider>().incrementPlayCount(song.id);
-    Navigator.push(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, animation, __) => SongDetailScreen(song: song),
-        transitionsBuilder: (_, animation, __, child) => SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(
-              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-          child: child,
-        ),
-      ),
-    );
+    // Song plays directly without navigating to detail page
   }
 
   @override

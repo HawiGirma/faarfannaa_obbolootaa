@@ -3,12 +3,13 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../models/song_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/song_provider.dart';
 import '../../services/audio_player_service.dart';
 import '../../widgets/featured_card.dart';
 import '../../widgets/song_card.dart';
 import '../../widgets/shimmer_loading.dart';
-import '../song_detail/song_detail_screen.dart';
+import '../admin/upload_song_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,24 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final player = context.read<AudioPlayerService>();
     player.playSong(song, queue: songs);
     context.read<SongProvider>().incrementPlayCount(song.id);
-    Navigator.push(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, animation, __) => SongDetailScreen(song: song),
-        transitionsBuilder: (_, animation, __, child) {
-          return SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
-                .animate(
-              CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              ),
-            ),
-            child: child,
-          );
-        },
-      ),
-    );
+    // Song plays directly without navigating to detail page
   }
 
   @override
@@ -271,6 +255,33 @@ class _HomeScreenState extends State<HomeScreen> {
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
+      ),
+      floatingActionButton: Consumer<AuthProvider>(
+        builder: (context, auth, _) {
+          // Only show upload button for admin users
+          if (!auth.isAdmin) return const SizedBox.shrink();
+
+          return FloatingActionButton.extended(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const UploadSongScreen(),
+                ),
+              );
+            },
+            backgroundColor: AppColors.primary,
+            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            label: const Text(
+              'Upload Song',
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
