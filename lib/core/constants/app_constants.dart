@@ -11,6 +11,7 @@ class AppConstants {
   static const String songsTable = 'songs';
   static const String usersTable = 'users';
   static const String favoritesTable = 'favorites';
+  static const String notesTable = 'notes';
 
   // ── Supabase Storage buckets ──────────────────────────────────────────
   static const String songsBucket = 'songs';

@@ -10,6 +10,7 @@ import '../../widgets/featured_card.dart';
 import '../../widgets/song_card.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../admin/upload_song_screen.dart';
+import '../search/search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -52,6 +53,19 @@ class _HomeScreenState extends State<HomeScreen> {
               snap: true,
               backgroundColor:
                   isDark ? AppColors.darkBackground : AppColors.lightBackground,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.search_rounded),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SearchScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
               flexibleSpace: FlexibleSpaceBar(
                 background: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 56, 20, 0),

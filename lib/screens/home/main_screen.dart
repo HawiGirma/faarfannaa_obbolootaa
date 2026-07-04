@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/mini_player.dart';
 import 'home_screen.dart';
-import '../search/search_screen.dart';
+import '../notes/notes_screen.dart';
 import '../favorites/favorites_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -18,7 +18,7 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<Widget> _screens = const [
     HomeScreen(),
-    SearchScreen(),
+    NotesScreen(),
     FavoritesScreen(),
     ProfileScreen(),
   ];
@@ -60,8 +60,8 @@ class _MainScreenState extends State<MainScreen> {
                       onTap: () => setState(() => _currentIndex = 0),
                     ),
                     _NavItem(
-                      icon: Icons.search_rounded,
-                      label: 'Search',
+                      icon: Icons.note_alt_outlined,
+                      label: 'Notes',
                       isSelected: _currentIndex == 1,
                       onTap: () => setState(() => _currentIndex = 1),
                     ),

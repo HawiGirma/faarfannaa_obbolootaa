@@ -10,6 +10,7 @@ import 'core/theme/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/song_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/note_provider.dart';
 import 'services/audio_player_service.dart';
 import 'services/background_audio_service.dart';
 import 'services/download_service.dart';
@@ -69,6 +70,7 @@ class FaarfannaApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => SongProvider()),
+        ChangeNotifierProvider(create: (_) => NoteProvider()),
         ChangeNotifierProvider.value(value: downloadService),
         ChangeNotifierProvider(
           create: (_) => AudioPlayerService(downloadService),

@@ -6,6 +6,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/app_utils.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/audio_player_service.dart';
+import 'queue_screen.dart';
+import 'sleep_timer_dialog.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
@@ -69,8 +71,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Colors.black.withOpacity(0.6),
-                      Colors.black.withOpacity(0.95),
+                      Colors.black.withValues(alpha: 0.6),
+                      Colors.black.withValues(alpha: 0.95),
                     ],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -121,6 +123,36 @@ class _PlayerScreenState extends State<PlayerScreen>
                           size: 22,
                         ),
                       ),
+                      IconButton(
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => const SleepTimerDialog(),
+                          );
+                        },
+                        icon: Icon(
+                          Icons.bedtime_rounded,
+                          color: player.hasSleepTimer
+                              ? AppColors.primary
+                              : Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const QueueScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(
+                          Icons.queue_music_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -168,7 +200,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                                   Text(
                                     song.artist,
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.65),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.65),
                                       fontSize: 15,
                                       fontFamily: 'Poppins',
                                     ),
@@ -188,8 +221,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                                 height: 44,
                                 decoration: BoxDecoration(
                                   color: isFav
-                                      ? AppColors.error.withOpacity(0.2)
-                                      : Colors.white.withOpacity(0.1),
+                                      ? AppColors.error.withValues(alpha: 0.2)
+                                      : Colors.white.withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
@@ -219,12 +252,12 @@ class _PlayerScreenState extends State<PlayerScreen>
                                   overlayRadius: 14,
                                 ),
                                 activeTrackColor: AppColors.primary,
-                                inactiveTrackColor: Colors.white.withOpacity(
-                                  0.2,
+                                inactiveTrackColor: Colors.white.withValues(
+                                  alpha: 0.2,
                                 ),
                                 thumbColor: Colors.white,
-                                overlayColor: AppColors.primary.withOpacity(
-                                  0.2,
+                                overlayColor: AppColors.primary.withValues(
+                                  alpha: 0.2,
                                 ),
                               ),
                               child: Slider(
@@ -243,7 +276,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                                   Text(
                                     AppUtils.formatDuration(player.position),
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.6),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.6),
                                       fontSize: 12,
                                       fontFamily: 'Poppins',
                                     ),
@@ -251,7 +285,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                                   Text(
                                     AppUtils.formatDuration(player.duration),
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.6),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.6),
                                       fontSize: 12,
                                       fontFamily: 'Poppins',
                                     ),
@@ -268,6 +303,19 @@ class _PlayerScreenState extends State<PlayerScreen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
+                            // Repeat mode
+                            IconButton(
+                              onPressed: player.toggleRepeatMode,
+                              icon: Icon(
+                                player.repeatMode == AudioRepeatMode.one
+                                    ? Icons.repeat_one_rounded
+                                    : Icons.repeat_rounded,
+                                color: player.repeatMode == AudioRepeatMode.off
+                                    ? Colors.white.withValues(alpha: 0.4)
+                                    : AppColors.primary,
+                              ),
+                              iconSize: 28,
+                            ),
                             // Previous
                             IconButton(
                               onPressed: player.playPrevious,
@@ -286,7 +334,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppColors.primary.withOpacity(0.5),
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.5),
                                       blurRadius: 30,
                                       spreadRadius: 5,
                                     ),
@@ -315,6 +364,23 @@ class _PlayerScreenState extends State<PlayerScreen>
                               icon: const Icon(Icons.skip_next_rounded),
                               color: Colors.white,
                               iconSize: 36,
+                            ),
+                            // Shuffle (placeholder for future)
+                            IconButton(
+                              onPressed: () {
+                                // TODO: Implement shuffle
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Shuffle coming soon!'),
+                                    duration: Duration(seconds: 1),
+                                  ),
+                                );
+                              },
+                              icon: Icon(
+                                Icons.shuffle_rounded,
+                                color: Colors.white.withValues(alpha: 0.4),
+                              ),
+                              iconSize: 28,
                             ),
                           ],
                         ),
@@ -353,7 +419,7 @@ class _AlbumArt extends StatelessWidget {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(isPlaying ? 0.5 : 0.2),
+            color: AppColors.primary.withValues(alpha: isPlaying ? 0.5 : 0.2),
             blurRadius: isPlaying ? 50 : 20,
             spreadRadius: isPlaying ? 10 : 0,
           ),
@@ -396,16 +462,16 @@ class _LyricsView extends StatelessWidget {
       height: 260,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
+        color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: lyrics.isEmpty
           ? Center(
               child: Text(
                 'No lyrics available',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
+                  color: Colors.white.withValues(alpha: 0.5),
                   fontFamily: 'Poppins',
                 ),
               ),
@@ -414,7 +480,7 @@ class _LyricsView extends StatelessWidget {
               child: Text(
                 lyrics,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.85),
+                  color: Colors.white.withValues(alpha: 0.85),
                   fontSize: 14,
                   fontFamily: 'Poppins',
                   height: 1.8,

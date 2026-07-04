@@ -1,11 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/song_model.dart';
 import 'download_service.dart';
 import 'background_audio_service.dart';
+
+enum AudioRepeatMode {
+  off, // No repeat
+  all, // Repeat all tracks in queue
+  one, // Repeat current track
+}
 
 class AudioPlayerService extends ChangeNotifier {
   final AudioPlayer _player = AudioPlayer();
@@ -19,6 +25,11 @@ class AudioPlayerService extends ChangeNotifier {
   bool _isLoading = false;
   List<SongModel> _queue = [];
   int _currentIndex = 0;
+  AudioRepeatMode _repeatMode = AudioRepeatMode.off;
+
+  // Sleep timer
+  Timer? _sleepTimer;
+  DateTime? _sleepEndTime;
 
   SongModel? get currentSong => _currentSong;
   bool get isPlaying => _isPlaying;
@@ -28,6 +39,9 @@ class AudioPlayerService extends ChangeNotifier {
   List<SongModel> get queue => _queue;
   int get currentIndex => _currentIndex;
   AudioPlayer get player => _player;
+  AudioRepeatMode get repeatMode => _repeatMode;
+  DateTime? get sleepEndTime => _sleepEndTime;
+  bool get hasSleepTimer => _sleepTimer != null && _sleepTimer!.isActive;
 
   double get progress {
     if (_duration.inMilliseconds == 0) return 0;
@@ -189,8 +203,17 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> _playNext() async {
-    if (_currentIndex < _queue.length - 1) {
+    if (_repeatMode == AudioRepeatMode.one) {
+      // Repeat current track
+      await seekTo(Duration.zero);
+      await _player.play();
+    } else if (_currentIndex < _queue.length - 1) {
+      // Move to next track
       _currentIndex++;
+      await playSong(_queue[_currentIndex]);
+    } else if (_repeatMode == AudioRepeatMode.all && _queue.isNotEmpty) {
+      // Repeat all: go back to first track
+      _currentIndex = 0;
       await playSong(_queue[_currentIndex]);
     }
   }
@@ -208,6 +231,62 @@ class AudioPlayerService extends ChangeNotifier {
     }
   }
 
+  /// Toggle repeat mode: off -> all -> one -> off
+  void toggleRepeatMode() {
+    switch (_repeatMode) {
+      case AudioRepeatMode.off:
+        _repeatMode = AudioRepeatMode.all;
+        break;
+      case AudioRepeatMode.all:
+        _repeatMode = AudioRepeatMode.one;
+        break;
+      case AudioRepeatMode.one:
+        _repeatMode = AudioRepeatMode.off;
+        break;
+    }
+    notifyListeners();
+  }
+
+  /// Jump to a specific song in the queue
+  Future<void> playQueueItem(int index) async {
+    if (index >= 0 && index < _queue.length) {
+      _currentIndex = index;
+      await playSong(_queue[_currentIndex]);
+    }
+  }
+
+  /// Set sleep timer to stop playback after specified duration
+  void setSleepTimer(Duration duration) {
+    cancelSleepTimer();
+    _sleepEndTime = DateTime.now().add(duration);
+    _sleepTimer = Timer(duration, () async {
+      debugPrint('Sleep timer: Stopping playback');
+      await stop();
+      _sleepEndTime = null;
+      notifyListeners();
+    });
+    notifyListeners();
+  }
+
+  /// Cancel active sleep timer
+  void cancelSleepTimer() {
+    if (_sleepTimer != null) {
+      _sleepTimer!.cancel();
+      _sleepTimer = null;
+      _sleepEndTime = null;
+      notifyListeners();
+    }
+  }
+
+  /// Get remaining time on sleep timer
+  Duration? getRemainingTime() {
+    if (_sleepEndTime != null) {
+      final remaining = _sleepEndTime!.difference(DateTime.now());
+      return remaining.isNegative ? Duration.zero : remaining;
+    }
+    return null;
+  }
+
   Future<void> stop() async {
     await _player.stop();
     _currentSong = null;
@@ -219,6 +298,7 @@ class AudioPlayerService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _sleepTimer?.cancel();
     _player.dispose();
     super.dispose();
   }
