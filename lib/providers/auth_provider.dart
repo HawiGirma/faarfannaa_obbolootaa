@@ -113,6 +113,86 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // ── Regular user sign up with phone ───────────────────────────────────
+
+  Future<bool> signUp({
+    required String phoneNumber,
+    required String password,
+    required String fullName,
+  }) async {
+    _status = AuthStatus.loading;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final user = await _authService.signUpWithPhone(
+        phoneNumber: phoneNumber,
+        password: password,
+        fullName: fullName,
+      );
+
+      if (user != null) {
+        _status = AuthStatus.authenticated;
+        notifyListeners();
+        return true;
+      }
+
+      _errorMessage = 'Sign up failed.';
+      _status = AuthStatus.error;
+      notifyListeners();
+      return false;
+    } on AuthException catch (e) {
+      _errorMessage = _mapAuthError(e.message);
+      _status = AuthStatus.error;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _errorMessage = 'Sign up failed: $e';
+      _status = AuthStatus.error;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ── Regular user sign in with phone ───────────────────────────────────
+
+  Future<bool> signInWithPhone({
+    required String phoneNumber,
+    required String password,
+  }) async {
+    _status = AuthStatus.loading;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final user = await _authService.signInWithPhone(
+        phoneNumber,
+        password,
+      );
+
+      if (user != null) {
+        _status = AuthStatus.authenticated;
+        notifyListeners();
+        return true;
+      }
+
+      _errorMessage = 'Sign in failed.';
+      _status = AuthStatus.error;
+      notifyListeners();
+      return false;
+    } on AuthException catch (e) {
+      _errorMessage = _mapAuthError(e.message);
+      _status = AuthStatus.error;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _errorMessage = 'Sign in failed: $e';
+      _status = AuthStatus.error;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<bool> _createAndSignInAdmin() async {
     try {
       // Try to register first
