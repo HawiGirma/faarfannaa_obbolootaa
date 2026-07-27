@@ -67,6 +67,10 @@ class NoteService {
     required String title,
     required String content,
     required String colorHex,
+    Map<String, dynamic>? richContent,
+    Map<String, dynamic>? richTitle,
+    String? fontFamily,
+    double? fontSize,
   }) async {
     try {
       if (!_isAuthenticated) {
@@ -85,6 +89,10 @@ class NoteService {
         'color': colorHex,
         'is_pinned': false,
         'is_archived': false,
+        if (richContent != null) 'rich_content': richContent,
+        if (richTitle != null) 'rich_title': richTitle,
+        if (fontFamily != null) 'font_family': fontFamily,
+        if (fontSize != null) 'font_size': fontSize,
       };
 
       print('NoteService: Inserting data: $noteData');
@@ -109,17 +117,30 @@ class NoteService {
     String? colorHex,
     bool? isPinned,
     bool? isArchived,
+    Map<String, dynamic>? richContent,
+    Map<String, dynamic>? richTitle,
+    bool? hasDrawing,
+    bool? hasImages,
+    String? fontFamily,
+    double? fontSize,
   }) async {
     try {
       if (!_isAuthenticated) throw Exception('User not authenticated');
 
       final updateData = <String, dynamic>{};
-      if (title != null)
+      if (title != null) {
         updateData['title'] = title.isEmpty ? 'Untitled' : title;
+      }
       if (content != null) updateData['content'] = content;
       if (colorHex != null) updateData['color'] = colorHex;
       if (isPinned != null) updateData['is_pinned'] = isPinned;
       if (isArchived != null) updateData['is_archived'] = isArchived;
+      if (richContent != null) updateData['rich_content'] = richContent;
+      if (richTitle != null) updateData['rich_title'] = richTitle;
+      if (hasDrawing != null) updateData['has_drawing'] = hasDrawing;
+      if (hasImages != null) updateData['has_images'] = hasImages;
+      if (fontFamily != null) updateData['font_family'] = fontFamily;
+      if (fontSize != null) updateData['font_size'] = fontSize;
 
       final response = await _supabase
           .from(_tableName)
