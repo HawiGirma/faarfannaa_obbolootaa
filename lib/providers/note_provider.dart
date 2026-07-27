@@ -65,7 +65,7 @@ class NoteProvider with ChangeNotifier {
   }) async {
     try {
       final colorHex =
-          '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+          '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
       final note = await _noteService.createNote(
         title: title,
         content: content,
@@ -95,7 +95,7 @@ class NoteProvider with ChangeNotifier {
       String? colorHex;
       if (color != null) {
         colorHex =
-            '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+            '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
       }
 
       final updatedNote = await _noteService.updateNote(
