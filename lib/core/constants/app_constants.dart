@@ -7,6 +7,9 @@ class AppConstants {
   static const String supabaseAnonKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13bnJzZm5uYXp5c2twdnlsY2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNDU3NjksImV4cCI6MjA5NTYyMTc2OX0.GMquG6710zq5NKRyCtGurHR4bY6F3cJCFACOLEJikRk';
 
+  // ── Phone Auth Domain ─────────────────────────────────────────────────
+  static const String phoneAuthDomain = '@faarfanna.app';
+
   // ── Supabase table names ──────────────────────────────────────────────
   static const String songsTable = 'songs';
   static const String usersTable = 'users';
