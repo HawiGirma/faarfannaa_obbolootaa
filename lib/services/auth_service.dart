@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 import '../core/constants/app_constants.dart';
+import '../utils/phone_validator.dart';
 
 class AuthService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -14,11 +15,28 @@ class AuthService {
 
   bool get isSignedIn => currentUser != null;
 
-  // ── Sign in ───────────────────────────────────────────────────────────
+  // ── Sign in with email (for backward compatibility) ──────────────────
 
   Future<User?> signIn(String email, String password) async {
     final response = await _client.auth.signInWithPassword(
       email: email.trim(),
+      password: password,
+    );
+    final user = response.user;
+    if (user != null) {
+      await _upsertUserDoc(user, isAdmin: _isAdminEmail(user.email));
+    }
+    return user;
+  }
+
+  // ── Sign in with phone number ─────────────────────────────────────────
+
+  Future<User?> signInWithPhone(String phoneNumber, String password) async {
+    // Convert phone to email format
+    final email = PhoneValidator.phoneToEmail(phoneNumber);
+
+    final response = await _client.auth.signInWithPassword(
+      email: email,
       password: password,
     );
     final user = response.user;
@@ -39,6 +57,40 @@ class AuthService {
     if (user != null) {
       await _upsertUserDoc(user, isAdmin: true);
     }
+    return user;
+  }
+
+  // ── Sign up with phone number ─────────────────────────────────────────
+
+  Future<User?> signUpWithPhone({
+    required String phoneNumber,
+    required String password,
+    required String fullName,
+  }) async {
+    // Convert phone to email format for Supabase Auth
+    final email = PhoneValidator.phoneToEmail(phoneNumber);
+
+    // Sign up with Supabase Auth
+    final response = await _client.auth.signUp(
+      email: email,
+      password: password,
+      data: {
+        'display_name': fullName,
+        'phone_number': phoneNumber,
+      },
+    );
+
+    final user = response.user;
+    if (user != null) {
+      // Create user profile with phone number
+      await _upsertUserDoc(
+        user,
+        isAdmin: false,
+        displayName: fullName,
+        phoneNumber: phoneNumber,
+      );
+    }
+
     return user;
   }
 
@@ -99,12 +151,25 @@ class AuthService {
   bool _isAdminEmail(String? email) =>
       AppConstants.adminEmails.contains(email?.toLowerCase());
 
-  Future<void> _upsertUserDoc(User user, {required bool isAdmin}) async {
+  Future<void> _upsertUserDoc(
+    User user, {
+    required bool isAdmin,
+    String? displayName,
+    String? phoneNumber,
+  }) async {
     try {
+      final name = displayName ??
+          user.userMetadata?['display_name'] as String? ??
+          'User';
+
+      final phone =
+          phoneNumber ?? user.userMetadata?['phone_number'] as String?;
+
       await _client.from(AppConstants.usersTable).upsert({
         'id': user.id,
         'email': user.email,
-        'display_name': user.userMetadata?['display_name'] ?? 'Admin',
+        'display_name': name,
+        'phone_number': phone,
         'is_admin': isAdmin,
         'favorite_ids': [],
       }, onConflict: 'id');
