@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/phone_validator.dart';
+import '../auth/login_screen.dart';
 import '../settings/settings_screen.dart';
 import '../admin/admin_screen.dart';
 
@@ -76,7 +78,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                     Text(
-                      auth.isAdmin ? 'Admin' : 'Guest',
+                      auth.user?.displayName ?? 'Guest',
                       style: TextStyle(
                         color:
                             isDark ? AppColors.textPrimary : AppColors.textDark,
@@ -87,8 +89,11 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      auth.isAdmin
-                          ? auth.user?.email ?? ''
+                      auth.user != null
+                          ? (auth.user!.phoneNumber != null
+                              ? PhoneValidator.formatForDisplay(
+                                  auth.user!.phoneNumber!)
+                              : auth.user!.email)
                           : 'Browse & listen freely',
                       style: TextStyle(
                         color: isDark
@@ -189,22 +194,35 @@ class ProfileScreen extends StatelessWidget {
                     const SizedBox(height: 8),
 
                     // Admin sign-in / sign-out
-                    if (auth.isAdmin)
+                    if (auth.user != null)
                       _MenuItem(
                         icon: Icons.logout_rounded,
-                        label: 'Sign Out Admin',
+                        label: 'Sign Out',
                         color: AppColors.error,
                         isDark: isDark,
                         onTap: () => auth.signOut(),
                       )
-                    else
+                    else ...[
+                      _MenuItem(
+                        icon: Icons.login_rounded,
+                        label: 'Sign In',
+                        color: AppColors.primary,
+                        isDark: isDark,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const LoginScreen()),
+                        ),
+                      ),
+                      // Keep admin login option
                       _MenuItem(
                         icon: Icons.admin_panel_settings_rounded,
                         label: 'Admin Login',
-                        color: AppColors.primary,
+                        color: AppColors.accent,
                         isDark: isDark,
                         onTap: () => _showAdminLoginDialog(context, isDark),
                       ),
+                    ],
 
                     const SizedBox(height: 32),
                     Text(
