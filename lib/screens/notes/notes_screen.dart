@@ -3,6 +3,11 @@ import 'package:provider/provider.dart';
 import '../../models/note_model.dart';
 import '../../providers/note_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../features/notes/core/theme/app_colors.dart';
+import '../../features/notes/widgets/modern_note_card.dart';
+import '../../features/notes/widgets/category_chip.dart';
+import '../../features/notes/widgets/section_header.dart';
+import '../../features/notes/widgets/empty_notes_state.dart';
 import '../auth/login_screen.dart';
 import 'note_editor_screen.dart';
 
@@ -18,10 +23,20 @@ class _NotesScreenState extends State<NotesScreen>
   @override
   bool get wantKeepAlive => true;
 
+  String _selectedCategory = 'All Notes';
+  final _searchController = TextEditingController();
+  bool _isSearching = false;
+
   @override
   void initState() {
     super.initState();
     _loadNotes();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _loadNotes() {
@@ -29,10 +44,7 @@ class _NotesScreenState extends State<NotesScreen>
       if (mounted) {
         final authProvider = context.read<AuthProvider>();
         if (authProvider.user != null) {
-          print('Loading notes for user: ${authProvider.user!.uid}');
           context.read<NoteProvider>().loadNotes();
-        } else {
-          print('No user logged in');
         }
       }
     });
@@ -46,170 +58,359 @@ class _NotesScreenState extends State<NotesScreen>
 
     // Check if user is logged in
     if (authProvider.user == null) {
-      return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
-        appBar: AppBar(
-          title: const Text('Notes'),
-          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          foregroundColor: isDark ? Colors.white : Colors.black87,
-          elevation: 0,
-        ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.lock_outline,
-                size: 64,
-                color: isDark ? Colors.grey[600] : Colors.grey,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Sign in to use notes',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.grey[300] : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Create an account to save your notes',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const LoginScreen(),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C4DFF),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Sign In',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildLoginPrompt(isDark);
     }
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
-      appBar: AppBar(
-        title: const Text('My Notes'),
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        foregroundColor: isDark ? Colors.white : Colors.black87,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              // TODO: Implement search
-            },
+      backgroundColor: isDark
+          ? NotesAppColors.backgroundDark
+          : NotesAppColors.backgroundLight,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Modern Header
+            _buildHeader(context, isDark),
+
+            // Category Filter Chips
+            _buildCategoryFilter(isDark),
+
+            // Notes List
+            Expanded(
+              child: Consumer<NoteProvider>(
+                builder: (context, noteProvider, child) {
+                  if (noteProvider.isLoading) {
+                    return Center(
+                      child: CircularProgressIndicator(
+                        color: isDark
+                            ? NotesAppColors.primaryLight
+                            : NotesAppColors.primary,
+                      ),
+                    );
+                  }
+
+                  if (noteProvider.error != null) {
+                    return _buildErrorState(noteProvider, isDark);
+                  }
+
+                  final notes = noteProvider.notes;
+
+                  if (notes.isEmpty) {
+                    return EmptyNotesState(isDark: isDark);
+                  }
+
+                  return RefreshIndicator(
+                    onRefresh: () => noteProvider.loadNotes(),
+                    color: isDark
+                        ? NotesAppColors.primaryLight
+                        : NotesAppColors.primary,
+                    child: ModernNotesGrid(notes: notes, isDark: isDark),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: _buildFAB(context, isDark),
+    );
+  }
+
+  Widget _buildLoginPrompt(bool isDark) {
+    return Scaffold(
+      backgroundColor: isDark
+          ? NotesAppColors.backgroundDark
+          : NotesAppColors.backgroundLight,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? NotesAppColors.surfaceDark
+                        : NotesAppColors.surfaceLight,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.lock_outline_rounded,
+                    size: 64,
+                    color: isDark
+                        ? NotesAppColors.textTertiaryDark
+                        : NotesAppColors.textTertiaryLight,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Sign in to use notes',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: isDark
+                        ? NotesAppColors.textPrimaryDark
+                        : NotesAppColors.textPrimaryLight,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Create an account to save and sync\nyour notes across devices',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark
+                        ? NotesAppColors.textSecondaryDark
+                        : NotesAppColors.textSecondaryLight,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const LoginScreen(),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDark
+                        ? NotesAppColors.primaryLight
+                        : NotesAppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 4,
+                    shadowColor: (isDark
+                            ? NotesAppColors.primaryLight
+                            : NotesAppColors.primary)
+                        .withValues(alpha: 0.4),
+                  ),
+                  child: const Text(
+                    'Sign In',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? NotesAppColors.surfaceDark.withValues(alpha: 0.5)
+            : Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark
+                ? NotesAppColors.dividerDark
+                : NotesAppColors.dividerLight,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Notes',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: isDark
+                        ? NotesAppColors.textPrimaryDark
+                        : NotesAppColors.textPrimaryLight,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Consumer<NoteProvider>(
+                  builder: (context, noteProvider, child) {
+                    final count = noteProvider.notes.length;
+                    return Text(
+                      '$count ${count == 1 ? 'note' : 'notes'}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark
+                            ? NotesAppColors.textSecondaryDark
+                            : NotesAppColors.textSecondaryLight,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
           IconButton(
-            icon: const Icon(Icons.more_vert),
+            icon: Icon(
+              Icons.search_rounded,
+              color: isDark
+                  ? NotesAppColors.textPrimaryDark
+                  : NotesAppColors.textPrimaryLight,
+            ),
+            onPressed: () {
+              setState(() => _isSearching = !_isSearching);
+            },
+            style: IconButton.styleFrom(
+              backgroundColor: isDark
+                  ? NotesAppColors.cardDark
+                  : NotesAppColors.surfaceLight,
+              padding: const EdgeInsets.all(12),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: Icon(
+              Icons.more_vert_rounded,
+              color: isDark
+                  ? NotesAppColors.textPrimaryDark
+                  : NotesAppColors.textPrimaryLight,
+            ),
             onPressed: () {
               // Show menu
             },
+            style: IconButton.styleFrom(
+              backgroundColor: isDark
+                  ? NotesAppColors.cardDark
+                  : NotesAppColors.surfaceLight,
+              padding: const EdgeInsets.all(12),
+            ),
           ),
         ],
       ),
-      body: Consumer<NoteProvider>(
-        builder: (context, noteProvider, child) {
-          if (noteProvider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    );
+  }
 
-          if (noteProvider.error != null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      'Error: ${noteProvider.error}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: isDark ? Colors.redAccent : Colors.red,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => noteProvider.loadNotes(),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
-          }
+  Widget _buildCategoryFilter(bool isDark) {
+    final categories = [
+      {'label': 'All Notes', 'icon': Icons.grid_view_rounded},
+      {'label': 'Favorites', 'icon': Icons.star_rounded},
+      {'label': 'Work', 'icon': Icons.work_rounded},
+      {'label': 'Personal', 'icon': Icons.person_rounded},
+      {'label': 'Ideas', 'icon': Icons.lightbulb_rounded},
+      {'label': 'Archived', 'icon': Icons.archive_rounded},
+    ];
 
-          final notes = noteProvider.notes;
-
-          if (notes.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.note_add_outlined,
-                    size: 80,
-                    color: isDark ? Colors.grey[700] : Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No notes yet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap + to create your first note',
-                    style: TextStyle(
-                      color: isDark ? Colors.grey[500] : Colors.grey[500],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () => noteProvider.loadNotes(),
-            child: MasonryGridView(notes: notes, isDark: isDark),
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        scrollDirection: Axis.horizontal,
+        itemCount: categories.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final category = categories[index];
+          return CategoryChip(
+            label: category['label'] as String,
+            icon: category['icon'] as IconData,
+            isSelected: _selectedCategory == category['label'],
+            onTap: () {
+              setState(() {
+                _selectedCategory = category['label'] as String;
+              });
+            },
+            isDark: isDark,
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _navigateToEditor(context),
-        child: const Icon(Icons.add),
+    );
+  }
+
+  Widget _buildErrorState(NoteProvider noteProvider, bool isDark) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 64,
+              color: NotesAppColors.error,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Something went wrong',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: isDark
+                    ? NotesAppColors.textPrimaryDark
+                    : NotesAppColors.textPrimaryLight,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              noteProvider.error ?? 'Unknown error',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isDark
+                    ? NotesAppColors.textSecondaryDark
+                    : NotesAppColors.textSecondaryLight,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => noteProvider.loadNotes(),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDark
+                    ? NotesAppColors.primaryLight
+                    : NotesAppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFAB(BuildContext context, bool isDark) {
+    return FloatingActionButton.extended(
+      onPressed: () => _navigateToEditor(context),
+      backgroundColor:
+          isDark ? NotesAppColors.primaryLight : NotesAppColors.primary,
+      foregroundColor: Colors.white,
+      elevation: 6,
+      icon: const Icon(Icons.add_rounded),
+      label: const Text(
+        'New Note',
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 15,
+        ),
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
       ),
     );
   }
@@ -223,17 +424,19 @@ class _NotesScreenState extends State<NotesScreen>
     );
 
     if (result == true && mounted) {
-      context.read<NoteProvider>().loadNotes();
+      if (mounted) {
+        context.read<NoteProvider>().loadNotes();
+      }
     }
   }
 }
 
-// Masonry Grid View for notes
-class MasonryGridView extends StatelessWidget {
+// Modern Masonry Grid View for notes
+class ModernNotesGrid extends StatelessWidget {
   final List<NoteModel> notes;
   final bool isDark;
 
-  const MasonryGridView({
+  const ModernNotesGrid({
     super.key,
     required this.notes,
     required this.isDark,
@@ -245,49 +448,38 @@ class MasonryGridView extends StatelessWidget {
     final regularNotes = notes.where((n) => !n.isPinned).toList();
 
     return ListView(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
         if (pinnedNotes.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              'PINNED',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
+          SectionHeader(
+            title: 'Pinned',
+            count: pinnedNotes.length,
+            isDark: isDark,
           ),
-          StaggeredGrid(notes: pinnedNotes, isDark: isDark),
-          const SizedBox(height: 16),
+          StaggeredNotesGrid(notes: pinnedNotes, isDark: isDark),
+          const SizedBox(height: 8),
         ],
         if (regularNotes.isNotEmpty) ...[
           if (pinnedNotes.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                'OTHERS',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
+            SectionHeader(
+              title: 'All Notes',
+              count: regularNotes.length,
+              isDark: isDark,
             ),
-          StaggeredGrid(notes: regularNotes, isDark: isDark),
+          StaggeredNotesGrid(notes: regularNotes, isDark: isDark),
         ],
+        const SizedBox(height: 80), // Space for FAB
       ],
     );
   }
 }
 
-// Staggered grid
-class StaggeredGrid extends StatelessWidget {
+// Staggered grid for dynamic note heights
+class StaggeredNotesGrid extends StatelessWidget {
   final List<NoteModel> notes;
   final bool isDark;
 
-  const StaggeredGrid({
+  const StaggeredNotesGrid({
     super.key,
     required this.notes,
     required this.isDark,
@@ -300,226 +492,14 @@ class StaggeredGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 0.85,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.75,
       ),
       itemCount: notes.length,
-      itemBuilder: (context, index) => NoteCard(
+      itemBuilder: (context, index) => ModernNoteCard(
         note: notes[index],
         isDark: isDark,
-      ),
-    );
-  }
-}
-
-// Individual note card
-class NoteCard extends StatelessWidget {
-  final NoteModel note;
-  final bool isDark;
-
-  const NoteCard({
-    super.key,
-    required this.note,
-    required this.isDark,
-  });
-
-  // Adjust card color for dark mode
-  Color _adjustColorForTheme(Color color) {
-    if (!isDark) return color;
-
-    // For dark mode, darken bright colors
-    final hsl = HSLColor.fromColor(color);
-    if (hsl.lightness > 0.6) {
-      return hsl.withLightness(0.3).toColor();
-    }
-    return color;
-  }
-
-  // Get text color based on background
-  Color _getTextColor(Color backgroundColor) {
-    final luminance = backgroundColor.computeLuminance();
-    return luminance > 0.5 ? Colors.black87 : Colors.white;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cardColor = _adjustColorForTheme(note.color);
-    final textColor = _getTextColor(cardColor);
-
-    return GestureDetector(
-      onTap: () => _navigateToEditor(context, note),
-      onLongPress: () => _showNoteOptions(context, note),
-      child: Card(
-        color: cardColor,
-        elevation: isDark ? 4 : 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: isDark
-              ? BorderSide(color: Colors.white.withOpacity(0.1), width: 1)
-              : BorderSide.none,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (note.title.isNotEmpty) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        note.title,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (note.isPinned)
-                      Icon(
-                        Icons.push_pin,
-                        size: 16,
-                        color: textColor.withOpacity(0.7),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-              ],
-              Expanded(
-                child: Text(
-                  note.content,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: textColor.withOpacity(0.87),
-                  ),
-                  maxLines: 10,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _navigateToEditor(BuildContext context, NoteModel note) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => NoteEditorScreen(note: note),
-      ),
-    );
-
-    if (result == true && context.mounted) {
-      context.read<NoteProvider>().loadNotes();
-    }
-  }
-
-  void _showNoteOptions(BuildContext context, NoteModel note) {
-    final provider = context.read<NoteProvider>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(
-                note.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-              title: Text(
-                note.isPinned ? 'Unpin' : 'Pin',
-                style: TextStyle(
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                provider.togglePin(note);
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.archive_outlined,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-              title: Text(
-                'Archive',
-                style: TextStyle(
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                provider.archiveNote(note.id);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title: const Text('Delete', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pop(context);
-                _confirmDelete(context, note, provider);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _confirmDelete(
-      BuildContext context, NoteModel note, NoteProvider provider) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        title: Text(
-          'Delete Note',
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-        content: Text(
-          'Are you sure you want to delete this note?',
-          style: TextStyle(
-            color: isDark ? Colors.white70 : Colors.black87,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: isDark ? Colors.white70 : Colors.black54,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              provider.deleteNote(note.id);
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
       ),
     );
   }
