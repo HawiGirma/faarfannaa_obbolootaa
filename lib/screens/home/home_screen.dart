@@ -201,34 +201,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
 
                   // Trending
-                  if (songProvider.trendingSongs.isNotEmpty) ...[
-                    _SectionHeader(
-                      title: 'Trending',
-                      onSeeAll: () {},
-                      isDark: isDark,
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      height: 170,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.only(left: 16),
-                        itemCount: songProvider.trendingSongs.take(6).length,
-                        itemBuilder: (_, i) {
-                          final song = songProvider.trendingSongs[i];
-                          return FeaturedCard(
-                            song: song,
-                            onTap: () => _playSong(
-                              context,
-                              song,
-                              songProvider.trendingSongs,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                  ],
+                  // if (songProvider.trendingSongs.isNotEmpty) ...[
+                  //   _SectionHeader(
+                  //     title: 'Trending',
+                  //     onSeeAll: () {},
+                  //     isDark: isDark,
+                  //   ),
+                  //   const SizedBox(height: 14),
+                  //   SizedBox(
+                  //     height: 170,
+                  //     child: ListView.builder(
+                  //       scrollDirection: Axis.horizontal,
+                  //       padding: const EdgeInsets.only(left: 16),
+                  //       itemCount: songProvider.trendingSongs.take(6).length,
+                  //       itemBuilder: (_, i) {
+                  //         final song = songProvider.trendingSongs[i];
+                  //         return FeaturedCard(
+                  //           song: song,
+                  //           onTap: () => _playSong(
+                  //             context,
+                  //             song,
+                  //             songProvider.trendingSongs,
+                  //           ),
+                  //         );
+                  //       },
+                  //     ),
+                  //   ),
+                  //   const SizedBox(height: 28),
+                  // ],
 
                   // All Songs
                   _SectionHeader(
