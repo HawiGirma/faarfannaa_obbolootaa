@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'rich_text_model.dart';
 
 class NoteModel {
   final String id;
@@ -11,6 +12,14 @@ class NoteModel {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  // Rich content fields
+  final RichContent? richContent;
+  final RichContent? richTitle;
+  final bool hasDrawing;
+  final bool hasImages;
+  final String? fontFamily;
+  final double? fontSize;
+
   NoteModel({
     required this.id,
     required this.userId,
@@ -21,6 +30,12 @@ class NoteModel {
     required this.isArchived,
     required this.createdAt,
     required this.updatedAt,
+    this.richContent,
+    this.richTitle,
+    this.hasDrawing = false,
+    this.hasImages = false,
+    this.fontFamily,
+    this.fontSize,
   });
 
   // ── Factory: from Supabase JSON ────────────────────────────────────────
@@ -35,6 +50,16 @@ class NoteModel {
       isArchived: json['is_archived'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+      richContent: json['rich_content'] != null
+          ? RichContent.fromJson(json['rich_content'] as Map<String, dynamic>)
+          : null,
+      richTitle: json['rich_title'] != null
+          ? RichContent.fromJson(json['rich_title'] as Map<String, dynamic>)
+          : null,
+      hasDrawing: json['has_drawing'] as bool? ?? false,
+      hasImages: json['has_images'] as bool? ?? false,
+      fontFamily: json['font_family'] as String?,
+      fontSize: json['font_size'] as double?,
     );
   }
 
@@ -50,6 +75,12 @@ class NoteModel {
       'is_archived': isArchived,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      if (richContent != null) 'rich_content': richContent!.toJson(),
+      if (richTitle != null) 'rich_title': richTitle!.toJson(),
+      'has_drawing': hasDrawing,
+      'has_images': hasImages,
+      if (fontFamily != null) 'font_family': fontFamily,
+      if (fontSize != null) 'font_size': fontSize,
     };
   }
 
@@ -64,6 +95,12 @@ class NoteModel {
     bool? isArchived,
     DateTime? createdAt,
     DateTime? updatedAt,
+    RichContent? richContent,
+    RichContent? richTitle,
+    bool? hasDrawing,
+    bool? hasImages,
+    String? fontFamily,
+    double? fontSize,
   }) {
     return NoteModel(
       id: id ?? this.id,
@@ -75,6 +112,12 @@ class NoteModel {
       isArchived: isArchived ?? this.isArchived,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      richContent: richContent ?? this.richContent,
+      richTitle: richTitle ?? this.richTitle,
+      hasDrawing: hasDrawing ?? this.hasDrawing,
+      hasImages: hasImages ?? this.hasImages,
+      fontFamily: fontFamily ?? this.fontFamily,
+      fontSize: fontSize ?? this.fontSize,
     );
   }
 
