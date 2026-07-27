@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../models/note_model.dart';
 import '../../providers/note_provider.dart';
-import '../../features/notes/core/theme/app_colors.dart';
+import 'widgets/drawing_canvas.dart';
 
 class NoteEditorScreen extends StatefulWidget {
   final NoteModel? note;
@@ -16,10 +17,62 @@ class NoteEditorScreen extends StatefulWidget {
 class _NoteEditorScreenState extends State<NoteEditorScreen> {
   late TextEditingController _titleController;
   late TextEditingController _contentController;
-  late Color _selectedColor;
   bool _isModified = false;
   bool _isSaving = false;
   final FocusNode _contentFocusNode = FocusNode();
+  final FocusNode _titleFocusNode = FocusNode();
+
+  // Formatting state
+  Color _textColor = Colors.black;
+  Color _backgroundColor = Colors.white;
+  double _fontSize = 16.0;
+  String _fontFamily = 'Inter';
+  bool _isBold = false;
+  bool _isItalic = false;
+  bool _isUnderline = false;
+
+  // Drawing state
+  bool _isDrawingMode = false;
+  final GlobalKey<DrawingCanvasState> _drawingKey = GlobalKey();
+  DrawingTool _currentDrawingTool = DrawingTool.pen;
+  Color _drawingColor = Colors.black;
+  double _drawingStrokeWidth = 3.0;
+
+  final List<String> _availableFonts = [
+    'Inter',
+    'Roboto',
+    'Montserrat',
+    'Lato',
+    'Open Sans',
+    'Playfair Display',
+    'Merriweather',
+    'Courier New',
+    'Kalam',
+    'Dancing Script',
+  ];
+
+  final List<Color> _textColors = [
+    Colors.black,
+    const Color(0xFF1A1A2E),
+    const Color(0xFF6B4CE6),
+    const Color(0xFFFF6B9D),
+    const Color(0xFFEF4444),
+    const Color(0xFFF59E0B),
+    const Color(0xFF10B981),
+    const Color(0xFF3B82F6),
+  ];
+
+  final List<Color> _backgroundColors = [
+    Colors.white,
+    const Color(0xFFFFE5E5), // Soft Pink
+    const Color(0xFFFFEBCC), // Soft Orange
+    const Color(0xFFFFF9CC), // Soft Yellow
+    const Color(0xFFD4F1D4), // Soft Green
+    const Color(0xFFD4E8FF), // Soft Blue
+    const Color(0xFFE8D4FF), // Soft Purple
+    const Color(0xFFFFD4E8), // Soft Rose
+    const Color(0xFFD4FFF4), // Soft Mint
+  ];
 
   @override
   void initState() {
@@ -27,17 +80,23 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _titleController = TextEditingController(text: widget.note?.title ?? '');
     _contentController =
         TextEditingController(text: widget.note?.content ?? '');
-    _selectedColor = widget.note?.color ?? NoteModel.noteColors[0];
 
     _titleController.addListener(() => setState(() => _isModified = true));
     _contentController.addListener(() => setState(() => _isModified = true));
 
-    // Auto-focus content field for new notes
-    if (widget.note == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _contentFocusNode.requestFocus();
+    // Set initial text and background colors based on theme
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      setState(() {
+        _textColor = isDark ? Colors.white : Colors.black;
+        _backgroundColor = isDark ? const Color(0xFF1A1A2E) : Colors.white;
+        _drawingColor = isDark ? Colors.white : Colors.black;
       });
-    }
+
+      if (widget.note == null) {
+        _titleFocusNode.requestFocus();
+      }
+    });
   }
 
   @override
@@ -45,6 +104,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _titleController.dispose();
     _contentController.dispose();
     _contentFocusNode.dispose();
+    _titleFocusNode.dispose();
     super.dispose();
   }
 
@@ -60,20 +120,18 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     bool success;
 
     if (widget.note == null) {
-      // Create new note
       final result = await provider.createNote(
         title: _titleController.text,
         content: _contentController.text,
-        color: _selectedColor,
+        color: Colors.white,
       );
       success = result != null;
     } else {
-      // Update existing note
       success = await provider.updateNote(
         noteId: widget.note!.id,
         title: _titleController.text,
         content: _contentController.text,
-        color: _selectedColor,
+        color: Colors.white,
       );
     }
 
@@ -90,104 +148,91 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     }
   }
 
-  void _showColorPicker() {
+  String _formatLastEdit() {
+    if (widget.note == null) return 'Last edit: Just now';
+    final updated = widget.note!.updatedAt;
+    final now = DateTime.now();
+    final formatter = DateFormat('hh:mma');
+
+    if (now.difference(updated).inHours < 24) {
+      return 'Last edit: ${formatter.format(updated).toLowerCase()}';
+    } else {
+      return 'Last edit: ${DateFormat('MMM dd, yyyy').format(updated)}';
+    }
+  }
+
+  void _showBackgroundColorPicker() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? NotesAppColors.surfaceDark : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24.0),
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Handle bar
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? NotesAppColors.dividerDark
-                      : NotesAppColors.dividerLight,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
             Text(
-              'Choose Color',
+              'Background Color',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: isDark
-                    ? NotesAppColors.textPrimaryDark
-                    : NotesAppColors.textPrimaryLight,
+                color: isDark ? Colors.white : Colors.black87,
               ),
             ),
-            const SizedBox(height: 24),
-            GridView.builder(
-              shrinkWrap: true,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 8,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
-              itemCount: NoteModel.noteColors.length,
-              itemBuilder: (context, index) {
-                final color = NoteModel.noteColors[index];
-                final isSelected = color == _selectedColor;
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: _backgroundColors.map((color) {
+                final isSelected = _backgroundColor == color;
                 return GestureDetector(
                   onTap: () {
                     setState(() {
-                      _selectedColor = color;
+                      _backgroundColor = color;
                       _isModified = true;
                     });
                     Navigator.pop(context);
                   },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(
                       color: color,
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: isSelected
-                            ? (isDark
-                                ? NotesAppColors.primaryLight
-                                : NotesAppColors.primary)
-                            : (isDark
-                                ? NotesAppColors.dividerDark
-                                : NotesAppColors.dividerLight),
-                        width: isSelected ? 3 : 2,
+                            ? const Color(0xFF6B4CE6)
+                            : (isDark ? Colors.white24 : Colors.black12),
+                        width: isSelected ? 3 : 1,
                       ),
                       boxShadow: isSelected
                           ? [
                               BoxShadow(
-                                color: color.withValues(alpha: 0.4),
+                                color: const Color(0xFF6B4CE6).withOpacity(0.3),
                                 blurRadius: 8,
                                 spreadRadius: 2,
-                              ),
+                              )
                             ]
                           : null,
                     ),
                     child: isSelected
-                        ? Icon(
-                            Icons.check_rounded,
-                            color: color.computeLuminance() > 0.5
-                                ? Colors.black87
-                                : Colors.white,
-                            size: 20,
+                        ? const Icon(
+                            Icons.check,
+                            color: Color(0xFF6B4CE6),
+                            size: 24,
                           )
                         : null,
                   ),
                 );
-              },
+              }).toList(),
             ),
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+            const SizedBox(height: 12),
           ],
         ),
       ),
@@ -196,11 +241,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = _selectedColor.computeLuminance() > 0.5
-        ? NotesAppColors.textPrimaryLight
-        : Colors.white;
-    final secondaryTextColor = textColor.withValues(alpha: 0.6);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return PopScope(
       canPop: !_isModified || _isSaving,
@@ -213,98 +255,15 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: _selectedColor,
-        body: SafeArea(
-          child: Column(
-            children: [
-              // Modern Top Bar
-              _buildTopBar(context, textColor, isDark),
-
-              // Metadata Section
-              if (widget.note != null) _buildMetadata(secondaryTextColor),
-
-              // Editor Content
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title Field
-                      TextField(
-                        controller: _titleController,
-                        decoration: InputDecoration(
-                          hintText: 'Title',
-                          hintStyle: TextStyle(
-                            color: secondaryTextColor,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                          height: 1.3,
-                          letterSpacing: -0.5,
-                        ),
-                        maxLines: null,
-                        textCapitalization: TextCapitalization.sentences,
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Content Field
-                      TextField(
-                        controller: _contentController,
-                        focusNode: _contentFocusNode,
-                        decoration: InputDecoration(
-                          hintText: 'Start typing...',
-                          hintStyle: TextStyle(
-                            color: secondaryTextColor,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: textColor,
-                          height: 1.6,
-                        ),
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        textCapitalization: TextCapitalization.sentences,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Bottom Toolbar
-              _buildBottomToolbar(context, textColor, isDark),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopBar(BuildContext context, Color textColor, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: _selectedColor,
-        border: Border(
-          bottom: BorderSide(
-            color: textColor.withValues(alpha: 0.1),
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Back Button
-          IconButton(
-            icon: Icon(Icons.arrow_back_rounded, color: textColor),
+        backgroundColor: _backgroundColor,
+        appBar: AppBar(
+          backgroundColor: _backgroundColor,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(
+              Icons.arrow_back,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
             onPressed: () async {
               if (_isModified && !_isSaving) {
                 await _saveNote();
@@ -312,408 +271,664 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 Navigator.pop(context, false);
               }
             },
-            style: IconButton.styleFrom(
-              backgroundColor: textColor.withValues(alpha: 0.1),
-              padding: const EdgeInsets.all(8),
-            ),
           ),
-          const Spacer(),
-
-          // Favorite Button (placeholder for future)
-          IconButton(
-            icon: Icon(Icons.star_outline_rounded, color: textColor),
-            onPressed: () {
-              // TODO: Toggle favorite
-            },
-            style: IconButton.styleFrom(
-              backgroundColor: textColor.withValues(alpha: 0.1),
-              padding: const EdgeInsets.all(8),
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Reminder Button (placeholder for future)
-          IconButton(
-            icon: Icon(Icons.notifications_none_rounded, color: textColor),
-            onPressed: () {
-              // TODO: Set reminder
-            },
-            style: IconButton.styleFrom(
-              backgroundColor: textColor.withValues(alpha: 0.1),
-              padding: const EdgeInsets.all(8),
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // More Menu
-          IconButton(
-            icon: Icon(Icons.more_vert_rounded, color: textColor),
-            onPressed: () {
-              _showMoreMenu(context, isDark);
-            },
-            style: IconButton.styleFrom(
-              backgroundColor: textColor.withValues(alpha: 0.1),
-              padding: const EdgeInsets.all(8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetadata(Color textColor) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          _MetadataChip(
-            icon: Icons.edit_outlined,
-            label: _formatDateTime(widget.note!.updatedAt),
-            textColor: textColor,
-          ),
-          if (widget.note!.createdAt != widget.note!.updatedAt)
-            _MetadataChip(
-              icon: Icons.access_time_rounded,
-              label: 'Created ${_formatDate(widget.note!.createdAt)}',
-              textColor: textColor,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomToolbar(
-      BuildContext context, Color textColor, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: _selectedColor,
-        border: Border(
-          top: BorderSide(
-            color: textColor.withValues(alpha: 0.1),
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Color Picker
-          IconButton(
-            icon: Icon(Icons.palette_outlined, color: textColor),
-            onPressed: _showColorPicker,
-            style: IconButton.styleFrom(
-              backgroundColor: textColor.withValues(alpha: 0.1),
-              padding: const EdgeInsets.all(10),
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Formatting buttons (placeholders)
-          IconButton(
-            icon: Icon(Icons.format_bold_rounded, color: textColor),
-            onPressed: () {
-              // TODO: Bold formatting
-            },
-            style: IconButton.styleFrom(
-              backgroundColor: textColor.withValues(alpha: 0.1),
-              padding: const EdgeInsets.all(10),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: Icon(Icons.format_list_bulleted_rounded, color: textColor),
-            onPressed: () {
-              // TODO: List formatting
-            },
-            style: IconButton.styleFrom(
-              backgroundColor: textColor.withValues(alpha: 0.1),
-              padding: const EdgeInsets.all(10),
-            ),
-          ),
-
-          const Spacer(),
-
-          // Save Button
-          _isSaving
-              ? Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(textColor),
-                    ),
-                  ),
-                )
-              : ElevatedButton.icon(
-                  onPressed: _saveNote,
-                  icon: Icon(Icons.check_rounded, size: 20),
-                  label: const Text('Save'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark
-                        ? NotesAppColors.primaryLight
-                        : NotesAppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 2,
-                  ),
-                ),
-        ],
-      ),
-    );
-  }
-
-  void _showMoreMenu(BuildContext context, bool isDark) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: isDark ? NotesAppColors.surfaceDark : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? NotesAppColors.dividerDark
-                    : NotesAppColors.dividerLight,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-
-            _MoreMenuItem(
-              icon: Icons.share_outlined,
-              title: 'Share',
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Share functionality
-              },
-              isDark: isDark,
-            ),
-            const SizedBox(height: 8),
-            _MoreMenuItem(
-              icon: Icons.content_copy_rounded,
-              title: 'Make a copy',
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Copy functionality
-              },
-              isDark: isDark,
-            ),
-            const SizedBox(height: 8),
-            _MoreMenuItem(
-              icon: Icons.archive_outlined,
-              title: 'Archive',
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Archive functionality
-              },
-              isDark: isDark,
-            ),
-            if (widget.note != null) ...[
-              const SizedBox(height: 8),
-              _MoreMenuItem(
-                icon: Icons.delete_outline_rounded,
-                title: 'Delete',
-                onTap: () {
-                  Navigator.pop(context);
-                  _confirmDelete(context);
-                },
-                isDark: isDark,
-                isDestructive: true,
-              ),
-            ],
-            SizedBox(height: MediaQuery.of(context).padding.bottom),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _confirmDelete(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? NotesAppColors.surfaceDark : Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Text(
-          'Delete Note?',
-          style: TextStyle(
-            color: isDark
-                ? NotesAppColors.textPrimaryDark
-                : NotesAppColors.textPrimaryLight,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        content: Text(
-          'This note will be permanently deleted.',
-          style: TextStyle(
-            color: isDark
-                ? NotesAppColors.textSecondaryDark
-                : NotesAppColors.textSecondaryLight,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: isDark
-                    ? NotesAppColors.textSecondaryDark
-                    : NotesAppColors.textSecondaryLight,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              if (widget.note != null) {
-                context.read<NoteProvider>().deleteNote(widget.note!.id);
-                Navigator.pop(context); // Close dialog
-                Navigator.pop(context, true); // Return to notes list
-              }
-            },
-            child: const Text(
-              'Delete',
-              style: TextStyle(
-                color: NotesAppColors.error,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDateTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inMinutes < 1) {
-      return 'Edited just now';
-    } else if (difference.inHours < 1) {
-      return 'Edited ${difference.inMinutes}m ago';
-    } else if (difference.inDays < 1) {
-      return 'Edited ${difference.inHours}h ago';
-    } else {
-      return 'Edited ${_formatDate(dateTime)}';
-    }
-  }
-
-  String _formatDate(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-  }
-}
-
-class _MetadataChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color textColor;
-
-  const _MetadataChip({
-    required this.icon,
-    required this.label,
-    required this.textColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: textColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: textColor),
-          const SizedBox(width: 6),
-          Text(
-            label,
+          title: Text(
+            'Note',
             style: TextStyle(
-              fontSize: 12,
-              color: textColor,
+              color: isDark ? Colors.white : Colors.black87,
+              fontSize: 18,
               fontWeight: FontWeight.w500,
             ),
           ),
+          actions: [
+            IconButton(
+              icon: Icon(
+                Icons.palette_outlined,
+                color: isDark ? Colors.white70 : Colors.black54,
+              ),
+              onPressed: _showBackgroundColorPicker,
+            ),
+            IconButton(
+              icon: Icon(
+                _isDrawingMode ? Icons.edit : Icons.draw_outlined,
+                color: _isDrawingMode
+                    ? const Color(0xFF6B4CE6)
+                    : (isDark ? Colors.white70 : Colors.black54),
+              ),
+              onPressed: () {
+                setState(() {
+                  _isDrawingMode = !_isDrawingMode;
+                  if (!_isDrawingMode) {
+                    // Hide keyboard when entering drawing mode
+                    FocusScope.of(context).unfocus();
+                  }
+                });
+              },
+            ),
+            PopupMenuButton(
+              icon: Icon(
+                Icons.more_vert,
+                color: isDark ? Colors.white70 : Colors.black54,
+              ),
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.bookmark_outline,
+                        size: 20,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Bookmark',
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  onTap: () {},
+                ),
+                PopupMenuItem(
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.share_outlined,
+                        size: 20,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Share',
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  onTap: () {},
+                ),
+                PopupMenuItem(
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: Colors.red,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ],
+                  ),
+                  onTap: () {},
+                ),
+              ],
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            // Last edit timestamp
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _formatLastEdit(),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
+                ),
+              ),
+            ),
+
+            // Editor area with drawing overlay
+            Expanded(
+              child: Stack(
+                children: [
+                  // Text editor
+                  if (!_isDrawingMode)
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Title input
+                          TextField(
+                            controller: _titleController,
+                            focusNode: _titleFocusNode,
+                            decoration: InputDecoration(
+                              hintText: 'Enter note title…',
+                              hintStyle: TextStyle(
+                                color: isDark ? Colors.white24 : Colors.black26,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontFamily: _fontFamily,
+                              color: _textColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: null,
+                          ),
+                          const SizedBox(height: 16),
+                          // Content input
+                          TextField(
+                            controller: _contentController,
+                            focusNode: _contentFocusNode,
+                            decoration: InputDecoration(
+                              hintText: 'Start typing…',
+                              hintStyle: TextStyle(
+                                color: isDark ? Colors.white24 : Colors.black26,
+                                fontSize: _fontSize,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            style: TextStyle(
+                              fontSize: _fontSize,
+                              fontFamily: _fontFamily,
+                              color: _textColor,
+                              fontWeight:
+                                  _isBold ? FontWeight.bold : FontWeight.normal,
+                              fontStyle: _isItalic
+                                  ? FontStyle.italic
+                                  : FontStyle.normal,
+                              decoration: _isUnderline
+                                  ? TextDecoration.underline
+                                  : TextDecoration.none,
+                              height: 1.6,
+                            ),
+                            maxLines: null,
+                            keyboardType: TextInputType.multiline,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Drawing canvas
+                  if (_isDrawingMode)
+                    DrawingCanvas(
+                      key: _drawingKey,
+                      tool: _currentDrawingTool,
+                      color: _drawingColor,
+                      strokeWidth: _drawingStrokeWidth,
+                      backgroundColor: _backgroundColor,
+                    ),
+                ],
+              ),
+            ),
+
+            // Bottom toolbar
+            _isDrawingMode ? _buildDrawingToolbar() : _buildFormattingToolbar(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormattingToolbar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF242438) : const Color(0xFFF5F5FF),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Color and size row
+          Row(
+            children: [
+              // Color label
+              Text(
+                'Color',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Color circles
+              Expanded(
+                child: SizedBox(
+                  height: 32,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _textColors.length,
+                    itemBuilder: (context, index) {
+                      final color = _textColors[index];
+                      final isSelected = _textColor == color;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _textColor = color),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF6B4CE6)
+                                    : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Size controls
+              Text(
+                'Size',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(
+                  Icons.remove_circle_outline,
+                  size: 20,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+                onPressed: () {
+                  if (_fontSize > 10) {
+                    setState(() => _fontSize -= 2);
+                  }
+                },
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _fontSize.toInt().toString(),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.add_circle_outline,
+                  size: 20,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+                onPressed: () {
+                  if (_fontSize < 36) {
+                    setState(() => _fontSize += 2);
+                  }
+                },
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Font selector row
+          SizedBox(
+            height: 40,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _availableFonts.length,
+              itemBuilder: (context, index) {
+                final font = _availableFonts[index];
+                final isSelected = _fontFamily == font;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _fontFamily = font),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF6B4CE6)
+                            : (isDark ? const Color(0xFF1A1A2E) : Colors.white),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF6B4CE6)
+                              : (isDark ? Colors.white24 : Colors.black12),
+                          width: 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          font,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontFamily: font,
+                            color: isSelected
+                                ? Colors.white
+                                : (isDark ? Colors.white : Colors.black87),
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Formatting buttons row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _formatButton(
+                icon: Icons.format_bold,
+                isActive: _isBold,
+                onTap: () => setState(() => _isBold = !_isBold),
+                isDark: isDark,
+              ),
+              _formatButton(
+                icon: Icons.format_italic,
+                isActive: _isItalic,
+                onTap: () => setState(() => _isItalic = !_isItalic),
+                isDark: isDark,
+              ),
+              _formatButton(
+                icon: Icons.format_underline,
+                isActive: _isUnderline,
+                onTap: () => setState(() => _isUnderline = !_isUnderline),
+                isDark: isDark,
+              ),
+              _formatButton(
+                icon: Icons.format_list_bulleted,
+                onTap: () {},
+                isDark: isDark,
+              ),
+              _formatButton(
+                icon: Icons.format_list_numbered,
+                onTap: () {},
+                isDark: isDark,
+              ),
+              _formatButton(
+                icon: Icons.link,
+                onTap: () {},
+                isDark: isDark,
+              ),
+              _formatButton(
+                icon: Icons.image_outlined,
+                onTap: () {},
+                isDark: isDark,
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
-}
 
-class _MoreMenuItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-  final bool isDark;
-  final bool isDestructive;
+  Widget _buildDrawingToolbar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-  const _MoreMenuItem({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-    required this.isDark,
-    this.isDestructive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isDestructive
-        ? NotesAppColors.error
-        : (isDark
-            ? NotesAppColors.textPrimaryDark
-            : NotesAppColors.textPrimaryLight);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: isDark
-              ? NotesAppColors.cardDark.withValues(alpha: 0.5)
-              : NotesAppColors.surfaceLight,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(width: 16),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: color,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF242438) : const Color(0xFFF5F5FF),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drawing tools
+          Row(
+            children: [
+              _drawingToolButton(
+                icon: Icons.edit,
+                tool: DrawingTool.pen,
+                label: 'Pen',
+                isDark: isDark,
               ),
+              _drawingToolButton(
+                icon: Icons.brush,
+                tool: DrawingTool.pencil,
+                label: 'Pencil',
+                isDark: isDark,
+              ),
+              _drawingToolButton(
+                icon: Icons.highlight,
+                tool: DrawingTool.marker,
+                label: 'Marker',
+                isDark: isDark,
+              ),
+              _drawingToolButton(
+                icon: Icons.auto_fix_high,
+                tool: DrawingTool.eraser,
+                label: 'Eraser',
+                isDark: isDark,
+              ),
+              const Spacer(),
+              IconButton(
+                icon: Icon(
+                  Icons.undo,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+                onPressed: () {
+                  _drawingKey.currentState?.undo();
+                },
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.redo,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+                onPressed: () {
+                  _drawingKey.currentState?.redo();
+                },
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.delete_outline,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+                onPressed: () {
+                  _drawingKey.currentState?.clear();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Drawing color picker
+          Row(
+            children: [
+              Text(
+                'Color',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 32,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _textColors.length,
+                    itemBuilder: (context, index) {
+                      final color = _textColors[index];
+                      final isSelected = _drawingColor == color;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _drawingColor = color),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF6B4CE6)
+                                    : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Width',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Slider(
+                  value: _drawingStrokeWidth,
+                  min: 1.0,
+                  max: 20.0,
+                  divisions: 19,
+                  activeColor: const Color(0xFF6B4CE6),
+                  onChanged: (value) {
+                    setState(() => _drawingStrokeWidth = value);
+                  },
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _drawingStrokeWidth.toInt().toString(),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _drawingToolButton({
+    required IconData icon,
+    required DrawingTool tool,
+    required String label,
+    required bool isDark,
+  }) {
+    final isSelected = _currentDrawingTool == tool;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () => setState(() => _currentDrawingTool = tool),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF6B4CE6)
+                : (isDark ? const Color(0xFF1A1A2E) : Colors.white),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFF6B4CE6)
+                  : (isDark ? Colors.white24 : Colors.black12),
+              width: 1,
             ),
-          ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: isSelected
+                    ? Colors.white
+                    : (isDark ? Colors.white70 : Colors.black54),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isSelected
+                      ? Colors.white
+                      : (isDark ? Colors.white70 : Colors.black54),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _formatButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool isDark,
+    bool isActive = false,
+  }) {
+    return IconButton(
+      icon: Icon(icon),
+      color: isActive
+          ? const Color(0xFF6B4CE6)
+          : (isDark ? Colors.white70 : Colors.black54),
+      onPressed: onTap,
+      iconSize: 24,
     );
   }
 }
