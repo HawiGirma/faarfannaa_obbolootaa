@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/note_model.dart';
 import '../../providers/note_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../auth/login_screen.dart';
 import 'note_editor_screen.dart';
 
 class NotesScreen extends StatefulWidget {
@@ -64,18 +65,48 @@ class _NotesScreenState extends State<NotesScreen>
               ),
               const SizedBox(height: 16),
               Text(
-                'Please sign in to use notes',
+                'Sign in to use notes',
                 style: TextStyle(
-                  fontSize: 16,
-                  color: isDark ? Colors.grey[400] : Colors.grey,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.grey[300] : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Create an account to save your notes',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
                 ),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: () {
-                  DefaultTabController.of(context).animateTo(3);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const LoginScreen(),
+                    ),
+                  );
                 },
-                child: const Text('Go to Profile'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7C4DFF),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Sign In',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ],
           ),
