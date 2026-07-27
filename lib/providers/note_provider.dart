@@ -62,6 +62,10 @@ class NoteProvider with ChangeNotifier {
     required String title,
     required String content,
     required Color color,
+    Map<String, dynamic>? richContent,
+    Map<String, dynamic>? richTitle,
+    String? fontFamily,
+    double? fontSize,
   }) async {
     try {
       final colorHex =
@@ -70,6 +74,10 @@ class NoteProvider with ChangeNotifier {
         title: title,
         content: content,
         colorHex: colorHex,
+        richContent: richContent,
+        richTitle: richTitle,
+        fontFamily: fontFamily,
+        fontSize: fontSize,
       );
 
       _notes.insert(0, note);
@@ -90,6 +98,12 @@ class NoteProvider with ChangeNotifier {
     Color? color,
     bool? isPinned,
     bool? isArchived,
+    Map<String, dynamic>? richContent,
+    Map<String, dynamic>? richTitle,
+    bool? hasDrawing,
+    bool? hasImages,
+    String? fontFamily,
+    double? fontSize,
   }) async {
     try {
       String? colorHex;
@@ -105,6 +119,12 @@ class NoteProvider with ChangeNotifier {
         colorHex: colorHex,
         isPinned: isPinned,
         isArchived: isArchived,
+        richContent: richContent,
+        richTitle: richTitle,
+        hasDrawing: hasDrawing,
+        hasImages: hasImages,
+        fontFamily: fontFamily,
+        fontSize: fontSize,
       );
 
       final index = _notes.indexWhere((note) => note.id == noteId);
