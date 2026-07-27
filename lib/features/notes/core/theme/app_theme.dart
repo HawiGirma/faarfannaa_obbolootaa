@@ -8,16 +8,14 @@ class NotesAppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      colorScheme: ColorScheme.light(
+      colorScheme: const ColorScheme.light(
         primary: NotesAppColors.primary,
         secondary: NotesAppColors.secondary,
         surface: NotesAppColors.surfaceLight,
-        background: NotesAppColors.backgroundLight,
         error: NotesAppColors.error,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
         onSurface: NotesAppColors.textPrimaryLight,
-        onBackground: NotesAppColors.textPrimaryLight,
       ),
       scaffoldBackgroundColor: NotesAppColors.backgroundLight,
       textTheme: GoogleFonts.interTextTheme(AppTextStyles.lightTextTheme),
@@ -95,16 +93,14 @@ class NotesAppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      colorScheme: ColorScheme.dark(
+      colorScheme: const ColorScheme.dark(
         primary: NotesAppColors.primaryLight,
         secondary: NotesAppColors.secondaryLight,
         surface: NotesAppColors.surfaceDark,
-        background: NotesAppColors.backgroundDark,
         error: NotesAppColors.error,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
         onSurface: NotesAppColors.textPrimaryDark,
-        onBackground: NotesAppColors.textPrimaryDark,
       ),
       scaffoldBackgroundColor: NotesAppColors.backgroundDark,
       textTheme: GoogleFonts.interTextTheme(AppTextStyles.darkTextTheme),
