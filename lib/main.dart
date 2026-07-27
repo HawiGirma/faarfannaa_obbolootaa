@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -26,26 +27,46 @@ void main() async {
   ]);
 
   // ── Initialize Supabase ───────────────────────────────────────────────
-  await Supabase.initialize(
-    url: AppConstants.supabaseUrl,
-    anonKey: AppConstants.supabaseAnonKey,
-  );
+  try {
+    await Supabase.initialize(
+      url: AppConstants.supabaseUrl,
+      anonKey: AppConstants.supabaseAnonKey,
+    );
+  } catch (e) {
+    debugPrint('Supabase initialization error: $e');
+  }
 
-  // ── Init background audio service ─────────────────────────────────────
-  final audioHandler = await AudioService.init(
-    builder: () => BackgroundAudioHandler(),
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.example.faarfannaa_obbolootaa.audio',
-      androidNotificationChannelName: 'Faarfanna Obbolootaa',
-      androidNotificationOngoing: true,
-      androidShowNotificationBadge: true,
-      androidStopForegroundOnPause: true,
-    ),
-  );
+  // ── Init background audio service with timeout and error handling ─────
+  BackgroundAudioHandler? audioHandler;
+  try {
+    audioHandler = await AudioService.init(
+      builder: () => BackgroundAudioHandler(),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'com.example.faarfannaa_obbolootaa.audio',
+        androidNotificationChannelName: 'Faarfanna Obbolootaa',
+        androidNotificationOngoing: true,
+        androidShowNotificationBadge: true,
+        androidStopForegroundOnPause: true,
+      ),
+    ).timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        debugPrint('AudioService initialization timed out');
+        throw TimeoutException('AudioService init timeout');
+      },
+    );
+  } catch (e) {
+    debugPrint('AudioService initialization error: $e');
+    // Continue without audio handler - will be handled gracefully in the app
+  }
 
   // ── Init local download cache ─────────────────────────────────────────
   final downloadService = DownloadService();
-  await downloadService.init();
+  try {
+    await downloadService.init();
+  } catch (e) {
+    debugPrint('DownloadService initialization error: $e');
+  }
 
   runApp(FaarfannaApp(
     downloadService: downloadService,
@@ -55,12 +76,12 @@ void main() async {
 
 class FaarfannaApp extends StatelessWidget {
   final DownloadService downloadService;
-  final BackgroundAudioHandler audioHandler;
+  final BackgroundAudioHandler? audioHandler;
 
   const FaarfannaApp({
     super.key,
     required this.downloadService,
-    required this.audioHandler,
+    this.audioHandler,
   });
 
   @override
@@ -75,7 +96,7 @@ class FaarfannaApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => AudioPlayerService(downloadService),
         ),
-        Provider.value(value: audioHandler),
+        if (audioHandler != null) Provider.value(value: audioHandler),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
