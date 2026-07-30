@@ -12,11 +12,14 @@ import 'providers/auth_provider.dart';
 import 'providers/song_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/note_provider.dart';
+import 'providers/bible_provider.dart';
 import 'services/audio_player_service.dart';
 import 'services/background_audio_service.dart';
 import 'services/download_service.dart';
+import 'services/bible_service.dart';
 import 'localization/app_localizations.dart';
 import 'screens/splash/splash_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,20 +71,27 @@ void main() async {
     debugPrint('DownloadService initialization error: $e');
   }
 
+  // ── Init Bible service ────────────────────────────────────────────────
+  final prefs = await SharedPreferences.getInstance();
+  final bibleService = BibleService(prefs);
+
   runApp(FaarfannaApp(
     downloadService: downloadService,
     audioHandler: audioHandler,
+    bibleService: bibleService,
   ));
 }
 
 class FaarfannaApp extends StatelessWidget {
   final DownloadService downloadService;
   final BackgroundAudioHandler? audioHandler;
+  final BibleService bibleService;
 
   const FaarfannaApp({
     super.key,
     required this.downloadService,
     this.audioHandler,
+    required this.bibleService,
   });
 
   @override
@@ -92,6 +102,7 @@ class FaarfannaApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => SongProvider()),
         ChangeNotifierProvider(create: (_) => NoteProvider()),
+        ChangeNotifierProvider(create: (_) => BibleProvider(bibleService)),
         ChangeNotifierProvider.value(value: downloadService),
         ChangeNotifierProvider(
           create: (_) => AudioPlayerService(downloadService),
