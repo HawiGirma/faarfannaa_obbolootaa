@@ -66,6 +66,8 @@ class NoteProvider with ChangeNotifier {
     Map<String, dynamic>? richTitle,
     String? fontFamily,
     double? fontSize,
+    bool? hasDrawing,
+    bool? hasImages,
   }) async {
     try {
       final colorHex =
