@@ -3,7 +3,7 @@ import '../../core/theme/app_colors.dart';
 import '../../widgets/mini_player.dart';
 import 'home_screen.dart';
 import '../notes/notes_screen.dart';
-import '../favorites/favorites_screen.dart';
+import '../bible/bible_screen.dart';
 import '../profile/profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
@@ -19,7 +19,7 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _screens = const [
     HomeScreen(),
     NotesScreen(),
-    FavoritesScreen(),
+    BibleScreen(),
     ProfileScreen(),
   ];
 
@@ -66,8 +66,8 @@ class _MainScreenState extends State<MainScreen> {
                       onTap: () => setState(() => _currentIndex = 1),
                     ),
                     _NavItem(
-                      icon: Icons.favorite_rounded,
-                      label: 'Favorites',
+                      icon: Icons.menu_book_rounded,
+                      label: 'Bible',
                       isSelected: _currentIndex == 2,
                       onTap: () => setState(() => _currentIndex = 2),
                     ),
