@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../../models/note_model.dart';
 import '../../providers/note_provider.dart';
+import '../../services/note_drawing_service.dart';
+import '../../services/note_image_service.dart';
+import '../../models/note_drawing_model.dart' as drawing_model;
+import '../../models/note_image_model.dart';
 import 'widgets/drawing_canvas.dart';
 
 class NoteEditorScreen extends StatefulWidget {
@@ -37,6 +43,15 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   DrawingTool _currentDrawingTool = DrawingTool.pen;
   Color _drawingColor = Colors.black;
   double _drawingStrokeWidth = 3.0;
+  drawing_model.DrawingData? _initialDrawing;
+
+  // Image state
+  final List<NoteImageModel> _noteImages = [];
+  final _imageService = NoteImageService();
+  final _imagePicker = ImagePicker();
+
+  // Services
+  final _drawingService = NoteDrawingService();
 
   final List<String> _availableFonts = [
     'Inter',
@@ -84,12 +99,20 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _titleController.addListener(() => setState(() => _isModified = true));
     _contentController.addListener(() => setState(() => _isModified = true));
 
+    // Load existing note data
+    if (widget.note != null) {
+      _backgroundColor = widget.note!.color;
+      _loadExistingNoteData();
+    }
+
     // Set initial text and background colors based on theme
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final isDark = Theme.of(context).brightness == Brightness.dark;
       setState(() {
         _textColor = isDark ? Colors.white : Colors.black;
-        _backgroundColor = isDark ? const Color(0xFF1A1A2E) : Colors.white;
+        if (widget.note == null) {
+          _backgroundColor = isDark ? const Color(0xFF1A1A2E) : Colors.white;
+        }
         _drawingColor = isDark ? Colors.white : Colors.black;
       });
 
@@ -97,6 +120,35 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         _titleFocusNode.requestFocus();
       }
     });
+  }
+
+  /// Load existing drawing and images for the note
+  Future<void> _loadExistingNoteData() async {
+    if (widget.note == null) return;
+
+    try {
+      // Load drawing if exists
+      if (widget.note!.hasDrawing) {
+        final drawingModel =
+            await _drawingService.fetchDrawingForNote(widget.note!.id);
+        if (drawingModel != null) {
+          setState(() {
+            _initialDrawing = drawingModel.drawingData;
+          });
+        }
+      }
+
+      // Load images if exists
+      if (widget.note!.hasImages) {
+        final images = await _imageService.fetchImagesForNote(widget.note!.id);
+        setState(() {
+          _noteImages.clear();
+          _noteImages.addAll(images);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading note data: $e');
+    }
   }
 
   @override
@@ -119,11 +171,21 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     final provider = context.read<NoteProvider>();
     bool success;
 
+    // Check if note has drawings
+    final hasDrawing = _drawingKey.currentState?.hasDrawing ?? false;
+
+    // Save the drawing before saving the note
+    if (hasDrawing && _isDrawingMode) {
+      await _drawingKey.currentState?.saveDrawing();
+    }
+
     if (widget.note == null) {
       final result = await provider.createNote(
         title: _titleController.text,
         content: _contentController.text,
-        color: Colors.white,
+        color: _backgroundColor,
+        hasDrawing: hasDrawing,
+        hasImages: _noteImages.isNotEmpty,
       );
       success = result != null;
     } else {
@@ -131,7 +193,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         noteId: widget.note!.id,
         title: _titleController.text,
         content: _contentController.text,
-        color: Colors.white,
+        color: _backgroundColor,
+        hasDrawing: hasDrawing,
+        hasImages: _noteImages.isNotEmpty,
       );
     }
 
@@ -158,6 +222,115 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       return 'Last edit: ${formatter.format(updated).toLowerCase()}';
     } else {
       return 'Last edit: ${DateFormat('MMM dd, yyyy').format(updated)}';
+    }
+  }
+
+  /// Insert image into note
+  Future<void> _insertImage() async {
+    try {
+      // Pick image from gallery
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 85,
+      );
+
+      if (pickedFile == null) return;
+
+      // Show loading indicator
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Uploading image...')),
+      );
+
+      // If note doesn't exist yet, create it first
+      String noteId = widget.note?.id ?? '';
+      if (noteId.isEmpty) {
+        final provider = context.read<NoteProvider>();
+        final newNote = await provider.createNote(
+          title: _titleController.text.isEmpty
+              ? 'Untitled'
+              : _titleController.text,
+          content: _contentController.text,
+          color: _backgroundColor,
+        );
+        if (newNote == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Failed to create note')),
+            );
+          }
+          return;
+        }
+        noteId = newNote.id;
+      }
+
+      // Upload image
+      final imageFile = File(pickedFile.path);
+      final imageModel = await _imageService.uploadImage(
+        noteId: noteId,
+        imageFile: imageFile,
+        position: _noteImages.length,
+      );
+
+      setState(() {
+        _noteImages.add(imageModel);
+        _isModified = true;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Image added successfully')),
+        );
+      }
+
+      // Update note to indicate it has images
+      final provider = context.read<NoteProvider>();
+      await provider.updateNote(
+        noteId: noteId,
+        hasImages: true,
+      );
+    } catch (e) {
+      debugPrint('Error inserting image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add image: $e')),
+        );
+      }
+    }
+  }
+
+  /// Delete an image from the note
+  Future<void> _deleteImage(NoteImageModel image) async {
+    try {
+      await _imageService.deleteImage(image.id, image.imageUrl);
+      setState(() {
+        _noteImages.remove(image);
+        _isModified = true;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Image removed')),
+        );
+      }
+
+      // Update note flag if no images left
+      if (_noteImages.isEmpty && widget.note != null) {
+        final provider = context.read<NoteProvider>();
+        await provider.updateNote(
+          noteId: widget.note!.id,
+          hasImages: false,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error deleting image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to delete image')),
+        );
+      }
     }
   }
 
@@ -421,6 +594,67 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                             maxLines: null,
                           ),
                           const SizedBox(height: 16),
+
+                          // Display inserted images
+                          if (_noteImages.isNotEmpty) ...[
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _noteImages.map((image) {
+                                return Stack(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.network(
+                                        image.imageUrl,
+                                        width: 150,
+                                        height: 150,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                          return Container(
+                                            width: 150,
+                                            height: 150,
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? Colors.white12
+                                                  : Colors.black12,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: const Icon(
+                                                Icons.broken_image,
+                                                size: 40),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: GestureDetector(
+                                        onTap: () => _deleteImage(image),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black54,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.close,
+                                            color: Colors.white,
+                                            size: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
                           // Content input
                           TextField(
                             controller: _contentController,
@@ -463,6 +697,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                       color: _drawingColor,
                       strokeWidth: _drawingStrokeWidth,
                       backgroundColor: _backgroundColor,
+                      noteId: widget.note?.id,
+                      initialDrawing: _initialDrawing,
                     ),
                 ],
               ),
@@ -688,7 +924,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               ),
               _formatButton(
                 icon: Icons.image_outlined,
-                onTap: () {},
+                onTap: _insertImage,
                 isDark: isDark,
               ),
             ],
