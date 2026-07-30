@@ -49,9 +49,16 @@ class DrawingCanvasState extends State<DrawingCanvas> {
   @override
   void dispose() {
     _saveTimer?.cancel();
-    _saveDrawingToDatabase(); // Final save on dispose
     super.dispose();
   }
+
+  /// Public method to trigger save (called by parent)
+  Future<void> saveDrawing() async {
+    await _saveDrawingToDatabase();
+  }
+
+  /// Check if canvas has any drawing
+  bool get hasDrawing => _points.isNotEmpty;
 
   // Load existing drawing if provided
   void _loadInitialDrawing() {
