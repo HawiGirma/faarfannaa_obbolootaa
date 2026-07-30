@@ -396,6 +396,7 @@ class _NotesScreenState extends State<NotesScreen>
 
   Widget _buildFAB(BuildContext context, bool isDark) {
     return FloatingActionButton.extended(
+      heroTag: 'notes_create_note_fab',
       onPressed: () => _navigateToEditor(context),
       backgroundColor:
           isDark ? NotesAppColors.primaryLight : NotesAppColors.primary,
