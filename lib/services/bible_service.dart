@@ -20,20 +20,63 @@ class BibleService {
 
   BibleService(this._prefs);
 
+  // Cache for the loaded Bible data
+  Map<String, dynamic>? _bibleData;
+
   // ──────────────────────────────────────────────────────────────────────
   // Bible Data Loading
   // ──────────────────────────────────────────────────────────────────────
 
+  /// Load and cache the Bible data from JSON
+  Future<Map<String, dynamic>> _loadBibleData() async {
+    if (_bibleData != null) return _bibleData!;
+
+    try {
+      final String jsonString =
+          await rootBundle.loadString('assets/JSON/afaan_oromo_bible.json');
+      _bibleData = json.decode(jsonString);
+      return _bibleData!;
+    } catch (e) {
+      print('Error loading Bible data: $e');
+      rethrow;
+    }
+  }
+
   /// Load list of all Bible books with metadata
   Future<List<BibleBook>> loadBibleBooks() async {
     try {
-      final String jsonString =
-          await rootBundle.loadString('assets/bible/books.json');
-      final List<dynamic> data = json.decode(jsonString);
-      return data.map((json) => BibleBook.fromJson(json)).toList();
+      final bibleData = await _loadBibleData();
+      final List<dynamic> books = bibleData['books'] ?? [];
+
+      // Get unique books (JSON has duplicates)
+      final Map<int, Map<String, dynamic>> uniqueBooks = {};
+      for (var bookJson in books) {
+        final id = bookJson['id'] as int;
+        if (!uniqueBooks.containsKey(id) ||
+            (bookJson['chapters'] as List?)?.isNotEmpty == true) {
+          uniqueBooks[id] = bookJson;
+        }
+      }
+
+      return uniqueBooks.values
+          .map((bookJson) {
+            final chapters = (bookJson['chapters'] as List?)
+                ?.where((ch) => (ch['verses'] as List?)?.isNotEmpty == true)
+                .toList();
+            final chapterCount = chapters?.length ?? 0;
+
+            return BibleBook(
+              name: bookJson['name'] as String,
+              abbreviation: bookJson['abbreviation'] as String,
+              totalChapters: chapterCount,
+            );
+          })
+          .where((book) => book.totalChapters > 0)
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
     } catch (e) {
-      // If file doesn't exist, return hardcoded book list
-      return _getDefaultBibleBooks();
+      print('Error loading Bible books: $e');
+      return [];
     }
   }
 
@@ -43,50 +86,104 @@ class BibleService {
     int chapterNumber,
   ) async {
     try {
-      // Try to load from assets first
-      final bookAbbr = _getBookAbbreviation(bookName);
-      final String jsonString = await rootBundle
-          .loadString('assets/bible/${bookAbbr}_$chapterNumber.json');
-      final Map<String, dynamic> data = json.decode(jsonString);
-      return BibleChapter.fromJson(data);
+      final bibleData = await _loadBibleData();
+      final List<dynamic> books = bibleData['books'] ?? [];
+
+      // Find the book with matching name
+      Map<String, dynamic>? targetBook;
+      for (var bookJson in books) {
+        if (bookJson['name'] == bookName) {
+          final chapters = bookJson['chapters'] as List?;
+          if (chapters != null && chapters.isNotEmpty) {
+            targetBook = bookJson;
+            break;
+          }
+        }
+      }
+
+      if (targetBook == null) {
+        throw Exception('Book $bookName not found');
+      }
+
+      // Find the chapter
+      final List<dynamic> chapters = targetBook['chapters'] ?? [];
+      final chapterData = chapters.firstWhere(
+        (ch) => ch['chapter'] == chapterNumber,
+        orElse: () => null,
+      );
+
+      if (chapterData == null) {
+        throw Exception('Chapter $chapterNumber not found in $bookName');
+      }
+
+      // Parse verses
+      final List<dynamic> versesJson = chapterData['verses'] ?? [];
+      final verses = versesJson.map((verseJson) {
+        return BibleVerse(
+          number: verseJson['verse'] as int,
+          text: verseJson['text'] as String,
+        );
+      }).toList();
+
+      return BibleChapter(
+        number: chapterNumber,
+        verses: verses,
+      );
     } catch (e) {
-      // Return sample chapter if file doesn't exist
-      return _getSampleChapter(bookName, chapterNumber);
+      print('Error loading chapter: $e');
+      rethrow;
     }
   }
 
   /// Search verses across the Bible
   Future<List<SearchResult>> searchVerses(String query) async {
-    // This is a simplified implementation
-    // In production, you'd use a full-text search database
-    final results = <SearchResult>[];
-    final books = await loadBibleBooks();
+    if (query.trim().isEmpty) return [];
 
-    // Search through first few chapters of each book for demo
-    for (final book in books.take(5)) {
-      for (int chapterNum = 1;
-          chapterNum <= (book.totalChapters > 3 ? 3 : book.totalChapters);
-          chapterNum++) {
-        try {
-          final chapter = await loadChapter(book.name, chapterNum);
-          for (final verse in chapter.verses) {
-            if (verse.text.toLowerCase().contains(query.toLowerCase())) {
+    try {
+      final results = <SearchResult>[];
+      final bibleData = await _loadBibleData();
+      final List<dynamic> books = bibleData['books'] ?? [];
+
+      final lowerQuery = query.toLowerCase();
+
+      // Search through all books
+      for (var bookJson in books) {
+        final String bookName = bookJson['name'] as String;
+        final List<dynamic>? chapters = bookJson['chapters'] as List?;
+
+        if (chapters == null || chapters.isEmpty) continue;
+
+        for (var chapterJson in chapters) {
+          final int chapterNum = chapterJson['chapter'] as int;
+          final List<dynamic>? verses = chapterJson['verses'] as List?;
+
+          if (verses == null) continue;
+
+          for (var verseJson in verses) {
+            final String text = verseJson['text'] as String;
+            if (text.toLowerCase().contains(lowerQuery)) {
               results.add(SearchResult(
-                bookName: book.name,
+                bookName: bookName,
                 chapter: chapterNum,
-                verse: verse.number,
-                text: verse.text,
+                verse: verseJson['verse'] as int,
+                text: text,
                 query: query,
               ));
+
+              // Limit results to prevent performance issues
+              if (results.length >= 100) {
+                return results;
+              }
             }
           }
-        } catch (e) {
-          // Skip chapters that fail to load
         }
       }
-    }
 
-    return results;
+      return results;
+    } catch (e) {
+      print('Error searching verses: $e');
+      return [];
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -361,122 +458,17 @@ class BibleService {
   // Helper Methods
   // ──────────────────────────────────────────────────────────────────────
 
-  String _getBookAbbreviation(String bookName) {
-    final bookMap = {
-      'Genesis': 'gen',
-      'Exodus': 'exo',
-      'John': 'jhn',
-      'Romans': 'rom',
-      'Revelation': 'rev',
-      // Add more mappings as needed
-    };
-    return bookMap[bookName] ?? bookName.toLowerCase().substring(0, 3);
-  }
+  /// Get book information by ID
+  Future<Map<String, dynamic>?> getBookById(int bookId) async {
+    final bibleData = await _loadBibleData();
+    final List<dynamic> books = bibleData['books'] ?? [];
 
-  List<BibleBook> _getDefaultBibleBooks() {
-    return [
-      BibleBook(name: 'Genesis', abbreviation: 'Gen', totalChapters: 50),
-      BibleBook(name: 'Exodus', abbreviation: 'Exo', totalChapters: 40),
-      BibleBook(name: 'Leviticus', abbreviation: 'Lev', totalChapters: 27),
-      BibleBook(name: 'Numbers', abbreviation: 'Num', totalChapters: 36),
-      BibleBook(name: 'Deuteronomy', abbreviation: 'Deu', totalChapters: 34),
-      BibleBook(name: 'Joshua', abbreviation: 'Jos', totalChapters: 24),
-      BibleBook(name: 'Judges', abbreviation: 'Jdg', totalChapters: 21),
-      BibleBook(name: 'Ruth', abbreviation: 'Rut', totalChapters: 4),
-      BibleBook(name: '1 Samuel', abbreviation: '1Sa', totalChapters: 31),
-      BibleBook(name: '2 Samuel', abbreviation: '2Sa', totalChapters: 24),
-      BibleBook(name: '1 Kings', abbreviation: '1Ki', totalChapters: 22),
-      BibleBook(name: '2 Kings', abbreviation: '2Ki', totalChapters: 25),
-      BibleBook(name: '1 Chronicles', abbreviation: '1Ch', totalChapters: 29),
-      BibleBook(name: '2 Chronicles', abbreviation: '2Ch', totalChapters: 36),
-      BibleBook(name: 'Ezra', abbreviation: 'Ezr', totalChapters: 10),
-      BibleBook(name: 'Nehemiah', abbreviation: 'Neh', totalChapters: 13),
-      BibleBook(name: 'Esther', abbreviation: 'Est', totalChapters: 10),
-      BibleBook(name: 'Job', abbreviation: 'Job', totalChapters: 42),
-      BibleBook(name: 'Psalms', abbreviation: 'Psa', totalChapters: 150),
-      BibleBook(name: 'Proverbs', abbreviation: 'Pro', totalChapters: 31),
-      BibleBook(name: 'Ecclesiastes', abbreviation: 'Ecc', totalChapters: 12),
-      BibleBook(name: 'Song of Solomon', abbreviation: 'SoS', totalChapters: 8),
-      BibleBook(name: 'Isaiah', abbreviation: 'Isa', totalChapters: 66),
-      BibleBook(name: 'Jeremiah', abbreviation: 'Jer', totalChapters: 52),
-      BibleBook(name: 'Lamentations', abbreviation: 'Lam', totalChapters: 5),
-      BibleBook(name: 'Ezekiel', abbreviation: 'Eze', totalChapters: 48),
-      BibleBook(name: 'Daniel', abbreviation: 'Dan', totalChapters: 12),
-      BibleBook(name: 'Hosea', abbreviation: 'Hos', totalChapters: 14),
-      BibleBook(name: 'Joel', abbreviation: 'Joe', totalChapters: 3),
-      BibleBook(name: 'Amos', abbreviation: 'Amo', totalChapters: 9),
-      BibleBook(name: 'Obadiah', abbreviation: 'Oba', totalChapters: 1),
-      BibleBook(name: 'Jonah', abbreviation: 'Jon', totalChapters: 4),
-      BibleBook(name: 'Micah', abbreviation: 'Mic', totalChapters: 7),
-      BibleBook(name: 'Nahum', abbreviation: 'Nah', totalChapters: 3),
-      BibleBook(name: 'Habakkuk', abbreviation: 'Hab', totalChapters: 3),
-      BibleBook(name: 'Zephaniah', abbreviation: 'Zep', totalChapters: 3),
-      BibleBook(name: 'Haggai', abbreviation: 'Hag', totalChapters: 2),
-      BibleBook(name: 'Zechariah', abbreviation: 'Zec', totalChapters: 14),
-      BibleBook(name: 'Malachi', abbreviation: 'Mal', totalChapters: 4),
-      // New Testament
-      BibleBook(name: 'Matthew', abbreviation: 'Mat', totalChapters: 28),
-      BibleBook(name: 'Mark', abbreviation: 'Mar', totalChapters: 16),
-      BibleBook(name: 'Luke', abbreviation: 'Luk', totalChapters: 24),
-      BibleBook(name: 'John', abbreviation: 'Jhn', totalChapters: 21),
-      BibleBook(name: 'Acts', abbreviation: 'Act', totalChapters: 28),
-      BibleBook(name: 'Romans', abbreviation: 'Rom', totalChapters: 16),
-      BibleBook(name: '1 Corinthians', abbreviation: '1Co', totalChapters: 16),
-      BibleBook(name: '2 Corinthians', abbreviation: '2Co', totalChapters: 13),
-      BibleBook(name: 'Galatians', abbreviation: 'Gal', totalChapters: 6),
-      BibleBook(name: 'Ephesians', abbreviation: 'Eph', totalChapters: 6),
-      BibleBook(name: 'Philippians', abbreviation: 'Phi', totalChapters: 4),
-      BibleBook(name: 'Colossians', abbreviation: 'Col', totalChapters: 4),
-      BibleBook(name: '1 Thessalonians', abbreviation: '1Th', totalChapters: 5),
-      BibleBook(name: '2 Thessalonians', abbreviation: '2Th', totalChapters: 3),
-      BibleBook(name: '1 Timothy', abbreviation: '1Ti', totalChapters: 6),
-      BibleBook(name: '2 Timothy', abbreviation: '2Ti', totalChapters: 4),
-      BibleBook(name: 'Titus', abbreviation: 'Tit', totalChapters: 3),
-      BibleBook(name: 'Philemon', abbreviation: 'Phm', totalChapters: 1),
-      BibleBook(name: 'Hebrews', abbreviation: 'Heb', totalChapters: 13),
-      BibleBook(name: 'James', abbreviation: 'Jam', totalChapters: 5),
-      BibleBook(name: '1 Peter', abbreviation: '1Pe', totalChapters: 5),
-      BibleBook(name: '2 Peter', abbreviation: '2Pe', totalChapters: 3),
-      BibleBook(name: '1 John', abbreviation: '1Jn', totalChapters: 5),
-      BibleBook(name: '2 John', abbreviation: '2Jn', totalChapters: 1),
-      BibleBook(name: '3 John', abbreviation: '3Jn', totalChapters: 1),
-      BibleBook(name: 'Jude', abbreviation: 'Jud', totalChapters: 1),
-      BibleBook(name: 'Revelation', abbreviation: 'Rev', totalChapters: 22),
-    ];
-  }
-
-  BibleChapter _getSampleChapter(String bookName, int chapterNumber) {
-    // Return John 3:16 as sample data for demonstration
-    if (bookName == 'John' && chapterNumber == 3) {
-      return BibleChapter(
-        number: 3,
-        verses: [
-          BibleVerse(
-            number: 16,
-            text:
-                'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.',
-          ),
-          BibleVerse(
-            number: 17,
-            text:
-                'For God did not send his Son into the world to condemn the world, but to save the world through him.',
-          ),
-        ],
-      );
+    for (var bookJson in books) {
+      if (bookJson['id'] == bookId) {
+        return bookJson as Map<String, dynamic>;
+      }
     }
-
-    // Return generic sample verses for other books/chapters
-    return BibleChapter(
-      number: chapterNumber,
-      verses: List.generate(
-        10,
-        (i) => BibleVerse(
-          number: i + 1,
-          text:
-              'This is verse ${i + 1} of $bookName chapter $chapterNumber. Bible content would be loaded from a data source.',
-        ),
-      ),
-    );
+    return null;
   }
 }
 
