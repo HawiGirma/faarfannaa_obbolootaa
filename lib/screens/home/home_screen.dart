@@ -276,6 +276,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (!auth.isAdmin) return const SizedBox.shrink();
 
           return FloatingActionButton.extended(
+            heroTag: 'home_upload_song_fab',
             onPressed: () {
               Navigator.push(
                 context,
