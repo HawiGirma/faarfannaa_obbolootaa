@@ -12,6 +12,12 @@ class BookSelector extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final provider = context.watch<BibleProvider>();
 
+    // Separate books by testament
+    final oldTestamentBooks =
+        provider.books.where((book) => book.isOldTestament).toList();
+    final newTestamentBooks =
+        provider.books.where((book) => book.isNewTestament).toList();
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
       decoration: BoxDecoration(
@@ -63,9 +69,9 @@ class BookSelector extends StatelessWidget {
                         ? AppColors.textSecondary
                         : AppColors.textDarkSecondary,
                     indicatorColor: AppColors.primary,
-                    tabs: const [
-                      Tab(text: 'Old Testament'),
-                      Tab(text: 'New Testament'),
+                    tabs: [
+                      Tab(text: 'Old Testament (${oldTestamentBooks.length})'),
+                      Tab(text: 'New Testament (${newTestamentBooks.length})'),
                     ],
                   ),
                   Expanded(
@@ -74,12 +80,12 @@ class BookSelector extends StatelessWidget {
                         _buildBookList(
                           context,
                           provider,
-                          provider.books.take(39).toList(),
+                          oldTestamentBooks,
                         ),
                         _buildBookList(
                           context,
                           provider,
-                          provider.books.skip(39).toList(),
+                          newTestamentBooks,
                         ),
                       ],
                     ),
@@ -106,12 +112,27 @@ class BookSelector extends StatelessWidget {
         final isSelected = provider.currentBook?.name == book.name;
 
         return ListTile(
-          title: Text(
-            book.name,
-            style: TextStyle(
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-              color: isSelected ? AppColors.primary : null,
-            ),
+          title: Row(
+            children: [
+              Text(
+                book.name,
+                style: TextStyle(
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: isSelected ? AppColors.primary : null,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '(${book.englishName})',
+                style: TextStyle(
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppColors.textSecondary
+                      : AppColors.textDarkSecondary,
+                ),
+              ),
+            ],
           ),
           subtitle: Text('${book.totalChapters} chapters'),
           trailing: isSelected

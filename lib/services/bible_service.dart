@@ -73,18 +73,34 @@ class BibleService {
             print('Book: ${bookJson['name']}, chapters: $chapterCount');
 
             return BibleBook(
+              id: bookJson['id'] as int,
               name: bookJson['name'] as String,
+              englishName: bookJson['englishName'] as String,
               abbreviation: bookJson['abbreviation'] as String,
+              testament: bookJson['testament'] as String,
+              order: bookJson['order'] as int,
               totalChapters: chapterCount,
             );
           })
           .where((book) => book.totalChapters > 0)
           .toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
+        ..sort((a, b) => a.order.compareTo(b.order)); // Sort by biblical order
     } catch (e) {
       print('Error loading Bible books: $e');
       return [];
     }
+  }
+
+  /// Get Old Testament books
+  Future<List<BibleBook>> loadOldTestamentBooks() async {
+    final allBooks = await loadBibleBooks();
+    return allBooks.where((book) => book.isOldTestament).toList();
+  }
+
+  /// Get New Testament books
+  Future<List<BibleBook>> loadNewTestamentBooks() async {
+    final allBooks = await loadBibleBooks();
+    return allBooks.where((book) => book.isNewTestament).toList();
   }
 
   /// Load a specific chapter from a book

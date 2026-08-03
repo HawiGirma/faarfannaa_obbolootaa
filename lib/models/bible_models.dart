@@ -66,29 +66,48 @@ class BibleChapter {
 
 /// Represents a Bible book
 class BibleBook {
+  final int id;
   final String name;
+  final String englishName;
   final String abbreviation;
+  final String testament; // "Old" or "New"
+  final int order;
   final int totalChapters;
   final List<BibleChapter>? chapters; // Lazy loaded
 
   BibleBook({
+    required this.id,
     required this.name,
+    required this.englishName,
     required this.abbreviation,
+    required this.testament,
+    required this.order,
     required this.totalChapters,
     this.chapters,
   });
 
+  bool get isOldTestament => testament == 'Old';
+  bool get isNewTestament => testament == 'New';
+
   Map<String, dynamic> toJson() => {
+        'id': id,
         'name': name,
+        'englishName': englishName,
         'abbreviation': abbreviation,
+        'testament': testament,
+        'order': order,
         'totalChapters': totalChapters,
         if (chapters != null)
           'chapters': chapters!.map((c) => c.toJson()).toList(),
       };
 
   factory BibleBook.fromJson(Map<String, dynamic> json) => BibleBook(
+        id: json['id'] as int,
         name: json['name'] as String,
+        englishName: json['englishName'] as String,
         abbreviation: json['abbreviation'] as String,
+        testament: json['testament'] as String,
+        order: json['order'] as int,
         totalChapters: json['totalChapters'] as int,
         chapters: json['chapters'] != null
             ? (json['chapters'] as List)
