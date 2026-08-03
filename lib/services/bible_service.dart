@@ -48,12 +48,17 @@ class BibleService {
       final bibleData = await _loadBibleData();
       final List<dynamic> books = bibleData['books'] ?? [];
 
-      // Get unique books (JSON has duplicates)
+      // Get unique books (JSON has duplicates) - prioritize entries with chapters
       final Map<int, Map<String, dynamic>> uniqueBooks = {};
       for (var bookJson in books) {
         final id = bookJson['id'] as int;
+        final chapters = bookJson['chapters'] as List?;
+        final hasChapters = chapters != null && chapters.isNotEmpty;
+
+        // If this book ID isn't in the map yet, OR the current entry has chapters and the stored one doesn't
         if (!uniqueBooks.containsKey(id) ||
-            (bookJson['chapters'] as List?)?.isNotEmpty == true) {
+            (hasChapters &&
+                (uniqueBooks[id]!['chapters'] as List?)?.isEmpty != false)) {
           uniqueBooks[id] = bookJson;
         }
       }
