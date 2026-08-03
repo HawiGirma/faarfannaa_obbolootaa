@@ -68,19 +68,15 @@ class BibleProvider extends ChangeNotifier {
       _customFonts = await _service.getCustomFonts();
 
       // Restore last reading position
-      if (_progress != null) {
+      if (_progress != null && _books.isNotEmpty) {
         final book = _books.firstWhere(
           (b) => b.name == _progress!.bookName,
           orElse: () => _books.first,
         );
         await loadChapter(book, _progress!.chapter);
       } else if (_books.isNotEmpty) {
-        // Load John 3 by default
-        final john = _books.firstWhere(
-          (b) => b.name == 'John',
-          orElse: () => _books.first,
-        );
-        await loadChapter(john, 3);
+        // Load first available book with chapters
+        await loadChapter(_books.first, 1);
       }
 
       _error = null;

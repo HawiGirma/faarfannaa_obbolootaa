@@ -65,6 +65,8 @@ class BibleService {
                 .toList();
             final chapterCount = chapters?.length ?? 0;
 
+            print('Book: ${bookJson['name']}, chapters: $chapterCount');
+
             return BibleBook(
               name: bookJson['name'] as String,
               abbreviation: bookJson['abbreviation'] as String,
